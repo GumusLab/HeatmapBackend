@@ -10,9 +10,17 @@ def cluster_row_and_col(net, dist_type='cosine', linkage_type='average',
   from copy import deepcopy
   from scipy.spatial.distance import pdist
   from . import categories, make_viz, cat_pval
+  import time
+  import traceback
 
   dm = {}
+  unique_id = time.time()
+  print(f"Function start: cluster_row_and_col called at {unique_id}")
+  # traceback.print_stack()
+
   for axis in ['row', 'col']:
+
+    print(f"******* axis is as follows ******** {axis} at {unique_id}")
 
     # save directly to dat structure
     node_info = net.dat['node_info'][axis]
@@ -24,6 +32,8 @@ def cluster_row_and_col(net, dist_type='cosine', linkage_type='average',
     # calc distance matrix
     if clust_library != 'hdbscan':
       dm[axis] = calc_distance_matrix(tmp_mat, axis, dist_type)
+      # dm[axis] = parallel_distance_matrix(tmp_mat, axis, dist_type,n_jobs=4)
+
     else:
       dm[axis] = None
 
@@ -56,7 +66,9 @@ def cluster_row_and_col(net, dist_type='cosine', linkage_type='average',
     if ignore_cat is False:
       categories.calc_cat_clust_order(net, axis)
 
+  print(f"**** all the axis are done **** at {unique_id}")
   if calc_cat_pval is True:
+    print('$$$$$ going here $$$$$')
     cat_pval.main(net)
 
   # make the visualization json
@@ -77,6 +89,60 @@ def calc_distance_matrix(tmp_mat, axis, dist_type='cosine'):
 
   return inst_dm
 
+def calculate_blockwise_distances(block_i, block_j, metric='cosine'):
+    from scipy.spatial.distance import pdist, cdist, squareform
+
+    """Calculate distances between rows of block_i and block_j."""
+    if block_i is block_j:
+        # Diagonal block: Calculate the distance within the block
+        return squareform(pdist(block_i, metric=metric))
+    else:
+        # Off-diagonal block: Calculate the distance between block_i and block_j using cdist
+        return cdist(block_i, block_j, metric=metric)
+
+def parallel_distance_matrix(data, axis='row', metric='cosine', n_jobs=-1):
+    import numpy as np
+    from scipy.spatial.distance import squareform
+    from joblib import Parallel, delayed
+    """Calculate the full pairwise distance matrix in parallel using block-wise processing."""
+    
+    if axis == 'col':
+        # Transpose the matrix to work with columns as rows
+        data = data.T
+    
+    n = len(data)
+    # n_jobs = calculate_free_cores()
+    print('**** n jobs are as follows ****',n_jobs)
+
+    block_size = n // n_jobs if n_jobs > 1 else n
+    blocks = [data[i:i + block_size] for i in range(0, n, block_size)]
+    
+    # Calculate the distances for each block combination in parallel
+    results = Parallel(n_jobs=n_jobs)(
+        delayed(calculate_blockwise_distances)(blocks[i], blocks[j], metric=metric)
+        for i in range(len(blocks)) for j in range(i, len(blocks))
+    )
+    
+    # Combine the results into a full distance matrix
+    distance_matrix = np.zeros((n, n))
+    
+    idx = 0
+    for i in range(len(blocks)):
+        for j in range(i, len(blocks)):
+            block = results[idx]
+            if i == j:
+                distance_matrix[i*block_size:(i+1)*block_size, j*block_size:(j+1)*block_size] = block
+            else:
+                # Handle off-diagonal blocks
+                distance_matrix[i*block_size:(i+1)*block_size, j*block_size:(j+1)*block_size] = block
+                distance_matrix[j*block_size:(j+1)*block_size, i*block_size:(i+1)*block_size] = block.T
+            idx += 1
+
+    # Convert the full distance matrix to condensed form
+    condensed_distance_matrix = squareform(distance_matrix, checks=False)
+
+    return condensed_distance_matrix
+
 def clust_and_group(net, inst_dm, axis, mat, dist_type='cosine', linkage_type='average',
                     clust_library='scipy', min_samples=1, min_cluster_size=2):
 
@@ -88,17 +154,18 @@ def clust_and_group(net, inst_dm, axis, mat, dist_type='cosine', linkage_type='a
   ### Added extra for debugging delete it #####
   import numpy as np
   if clust_library == 'scipy':
-    print("***** The data is ****",inst_dm)
-       # Check for infinite values
-    has_nan = np.isnan(inst_dm).any()
-    if has_nan:
-        print("NaN values found in the matrix.")
-        nan_indices = np.where(np.isnan(inst_dm))
-        print("Indices of NaN values:", nan_indices)
-    else:
-        print("No NaN values found in the matrix.")
+    # Check for infinite values
+    # has_nan = np.isnan(inst_dm).any()
+    # if has_nan:
+    #     print("NaN values found in the matrix.")
+    #     nan_indices = np.where(np.isnan(inst_dm))
+    #     print("Indices of NaN values:", nan_indices)
+    # else:
+    #     print("No NaN values found in the matrix.")
+
 
     Y = hier.linkage(inst_dm, method=linkage_type)
+    print('********* linkage finding done **********')
 
   elif clust_library == 'fastcluster':
     import fastcluster
@@ -152,6 +219,11 @@ def clust_and_group(net, inst_dm, axis, mat, dist_type='cosine', linkage_type='a
     Z = hier.dendrogram(Y, no_plot=True)
 
   Z = hier.dendrogram(Y, no_plot=True)
+  # Z = hier.dendrogram(Y, no_plot=True, truncate_mode='level', p=12)
+
+  # if axis == 'row':
+  #   print(Z)
+
   inst_clust_order = Z['leaves']
 
   return inst_clust_order, Y

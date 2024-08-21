@@ -15,15 +15,14 @@ def viz_json(net, dendro=True, links=False):
     all_cats = [x for x in inst_keys if 'cat-' in x]
 
     for i in range(len(net.dat['nodes'][inst_rc])):
+      # print(net.dat['nodes'][inst_rc])
       inst_dict = {}
       inst_dict['name'] = net.dat['nodes'][inst_rc][i]
       inst_dict['ini'] = net.dat['node_info'][inst_rc]['ini'][i]
       inst_dict['clust'] = net.dat['node_info'][inst_rc]['clust'].index(i)
       inst_dict['rank'] = net.dat['node_info'][inst_rc]['rank'][i]
-
       if 'rankvar' in inst_keys:
         inst_dict['rankvar'] = net.dat['node_info'][inst_rc]['rankvar'][i]
-
       # fix for similarity matrix
       if len(all_cats) > 0:
 

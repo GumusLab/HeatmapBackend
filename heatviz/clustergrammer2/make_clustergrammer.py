@@ -9,11 +9,13 @@ https://github.com/MaayanLab/clustergrammer-py
 # from clustergrammer import Network
 from clustergrammer_fun import Network
 import pandas as pd
+import cProfile
+import pstats
 import numpy as np
 from scipy.spatial.distance import pdist, squareform
 
 
-def make_cluster(data,assay_type='None',val_scale='None',results_file=False,sampleMetadata=None):
+def make_cluster(data=None,assay_type='None',val_scale='None',results_file=False,sampleMetadata=None):
 
     # if not results_file and assay_type != 'rnaseq':
     #     row_categories = []
@@ -26,7 +28,12 @@ def make_cluster(data,assay_type='None',val_scale='None',results_file=False,samp
     #         col_categories = list(sampleMetadata[firstKey].keys())
         
     #     column_categories,col_cat_data,row_categories,row_cat_data = csv_to_categories(data,col_categories,row_categories,sampleMetadata)
+    # Start profiling
     
+    # data = pd.read_csv('./txt/random_dataset.csv',index_col=0)
+    # data = pd.read_csv('./txt/cytof_output.csv',index_col=0)
+    # profiler = cProfile.Profile()
+    # profiler.enable()
 
     net = Network()
     net.load_df(data)
@@ -38,13 +45,22 @@ def make_cluster(data,assay_type='None',val_scale='None',results_file=False,samp
     #     net.add_cats(axis='row', cat_data=row_cat_data)
     #     net.add_cats(axis='col', cat_data=col_cat_data)
 
+    # profiler = cProfile.Profile()
+    # profiler.enable()
+
     net.cluster(dist_type='cos', dendro=True,
-                sim_mat=True, filter_sim=0.1, calc_cat_pval=False, enrichrgram=True)
+                sim_mat=False, filter_sim=0.1, calc_cat_pval=False, enrichrgram=True)
+    
+    # Stop profiling
+    # profiler.disable()
+
+    # Print profiling results
+    # profiler_stats = pstats.Stats(profiler).sort_stats('cumtime')
+    # profiler_stats.print_stats(10)  # Print top 10 results
     
     return net.export_net_json(net_type='viz', indent='no-indent')
 
-
-
+# make_cluster()
 
 # net = Network()
 
