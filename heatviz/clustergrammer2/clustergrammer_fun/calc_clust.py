@@ -12,6 +12,7 @@ def cluster_row_and_col(net, dist_type='cosine', linkage_type='average',
   from . import categories, make_viz, cat_pval
   import time
   import traceback
+  import numpy as np
 
   dm = {}
   unique_id = time.time()
@@ -19,8 +20,6 @@ def cluster_row_and_col(net, dist_type='cosine', linkage_type='average',
   # traceback.print_stack()
 
   for axis in ['row', 'col']:
-
-    print(f"******* axis is as follows ******** {axis} at {unique_id}")
 
     # save directly to dat structure
     node_info = net.dat['node_info'][axis]
@@ -31,8 +30,16 @@ def cluster_row_and_col(net, dist_type='cosine', linkage_type='average',
 
     # calc distance matrix
     if clust_library != 'hdbscan':
-      dm[axis] = calc_distance_matrix(tmp_mat, axis, dist_type)
+
       # dm[axis] = parallel_distance_matrix(tmp_mat, axis, dist_type,n_jobs=4)
+      dm[axis] = calc_distance_matrix(tmp_mat, axis, dist_type)
+
+      # Check if NaN exists in dm[axis]
+      if np.isnan(dm[axis]).any():
+          print("⚠️ Warning: NaN values detected in the distance matrix!")
+      else:
+          print("✅ No NaN values detected.")
+
 
     else:
       dm[axis] = None
@@ -41,7 +48,7 @@ def cluster_row_and_col(net, dist_type='cosine', linkage_type='average',
 
     # cluster
     if run_clustering is True:
-      node_info['clust'], node_info['Y'] = clust_and_group(net,
+      node_info['clust'], node_info['Y'],  node_info['group'] = clust_and_group(net,
                                                      dm[axis],
                                                      axis,
                                                      tmp_mat,
@@ -64,30 +71,107 @@ def cluster_row_and_col(net, dist_type='cosine', linkage_type='average',
 
     ##################################
     if ignore_cat is False:
-      categories.calc_cat_clust_order(net, axis)
+      try:
+          categories.calc_cat_clust_order(net, axis)
+      except Exception as e:  # Catch all exceptions
+          print(f"⚠️ Error in calc_cat_clust_order: {e}")
 
-  print(f"**** all the axis are done **** at {unique_id}")
+
   if calc_cat_pval is True:
-    print('$$$$$ going here $$$$$')
     cat_pval.main(net)
 
   # make the visualization json
-  make_viz.viz_json(net, dendro, links)
+  try:
+    make_viz.viz_json(net, dendro, links)
+  except Exception as e:  # Catch all exceptions
+    print(f"⚠️ Error in calc_cat_clust_order: {e}")
+
+
+  # make_viz.viz_json(net, dendro, links)
 
   return dm
 
+# def calc_distance_matrix(tmp_mat, axis, dist_type='cosine'):
+#   from scipy.spatial.distance import pdist
+#   import numpy as np
+
+#   if axis == 'row':
+#     inst_dm = pdist(tmp_mat, metric=dist_type)
+#   elif axis == 'col':
+#     inst_dm = pdist(tmp_mat.transpose(), metric=dist_type)
+
+#   inst_dm[inst_dm < 0] = float(0)
+
+#   return inst_dm
+
+# def calc_distance_matrix(tmp_mat, axis, dist_type='cosine'):
+#     from scipy.spatial.distance import pdist
+#     import numpy as np
+
+#     try:
+#         if axis not in ['row', 'col']:
+#             raise ValueError("Invalid axis. Use 'row' or 'col'.")
+        
+#         tmp_mat = np.array(tmp_mat, dtype=np.float64)  # Ensure it's a NumPy array
+
+#         print(f"Matrix shape: {tmp_mat.shape}")  
+
+#         if axis == 'row':
+#             inst_dm = pdist(tmp_mat, metric=dist_type)
+#         elif axis == 'col':
+#             inst_dm = pdist(tmp_mat.T, metric=dist_type)  # Using .T instead of transpose() for readability
+
+#         inst_dm[inst_dm < 0] = 0.0  # Ensuring non-negative distances
+
+#         return inst_dm
+
+#     except ValueError as ve:
+#         print(f"ValueError: {ve}")
+#     except TypeError as te:
+#         print(f"TypeError: {te}")
+#     except Exception as e:  # Catch-all for unexpected errors
+#         print(f"An error occurred: {e}")
+
+#     return None  # Return None in case of failure
+
+
 def calc_distance_matrix(tmp_mat, axis, dist_type='cosine'):
-  from scipy.spatial.distance import pdist
-  import numpy as np
+    from scipy.spatial.distance import pdist
+    import numpy as np
 
-  if axis == 'row':
-    inst_dm = pdist(tmp_mat, metric=dist_type)
-  elif axis == 'col':
-    inst_dm = pdist(tmp_mat.transpose(), metric=dist_type)
+    try:
+        if axis not in ['row', 'col']:
+            raise ValueError("Invalid axis. Use 'row' or 'col'.")
 
-  inst_dm[inst_dm < 0] = float(0)
+        tmp_mat = np.array(tmp_mat, dtype=np.float64)  # Convert to float (ensures numerical stability)
 
-  return inst_dm
+
+
+        # Normalize for cosine distance (prevents division by zero issues)
+        if dist_type == 'cosine':
+            norms = np.linalg.norm(tmp_mat, axis=1 if axis == 'row' else 0, keepdims=True)
+            norms[norms == 0] = 1  # Avoid division by zero
+            tmp_mat = tmp_mat / norms  # Normalize
+
+        # Compute distance matrix
+        inst_dm = pdist(tmp_mat if axis == 'row' else tmp_mat.T, metric=dist_type)
+
+        # Ensure non-negative distances
+        inst_dm[inst_dm < 0] = 0.0  
+
+        return inst_dm
+
+    except ValueError as ve:
+        print(f"ValueError: {ve}")
+    except TypeError as te:
+        print(f"TypeError: {te}")
+    except Exception as e:  # Catch-all for unexpected errors
+        print(f"An error occurred: {e}")
+
+    return None  # Return None in case of failure
+
+
+
 
 def calculate_blockwise_distances(block_i, block_j, metric='cosine'):
     from scipy.spatial.distance import pdist, cdist, squareform
@@ -165,7 +249,6 @@ def clust_and_group(net, inst_dm, axis, mat, dist_type='cosine', linkage_type='a
 
 
     Y = hier.linkage(inst_dm, method=linkage_type)
-    print('********* linkage finding done **********')
 
   elif clust_library == 'fastcluster':
     import fastcluster
@@ -225,8 +308,21 @@ def clust_and_group(net, inst_dm, axis, mat, dist_type='cosine', linkage_type='a
   #   print(Z)
 
   inst_clust_order = Z['leaves']
+  # Only calculate groups for hierarchical clustering methods
+  groups = {}
+  if clust_library in ['scipy', 'fastcluster']:
+      all_dist = group_cutoffs()
+      for inst_dist in all_dist:
+          inst_key = str(inst_dist).replace('.', '')
+          groups[inst_key] = hier.fcluster(Y, inst_dist * inst_dm.max(), 'distance')
+          groups[inst_key] = groups[inst_key].tolist()
+  elif clust_library == 'hdbscan':
+      # For HDBSCAN, you might want to handle groups differently
+      # One option is to use the cluster labels at different probabilities
+      # This is just a placeholder - you'll need to adapt this for HDBSCAN
+      groups['hdbscan_clusters'] = clusterer.labels_.tolist()
 
-  return inst_clust_order, Y
+  return inst_clust_order, Y, groups
 
 def sort_rank_nodes(net, rowcol, rank_type):
   import numpy as np
@@ -265,3 +361,9 @@ def sort_rank_nodes(net, rowcol, rank_type):
     sort_index.append(tmp_sort_nodes.index(inst_node))
 
   return sort_index
+
+def group_cutoffs():
+  all_dist = []
+  for i in range(11):
+    all_dist.append(float(i) / 10)
+  return all_dist

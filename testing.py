@@ -77,7 +77,7 @@ def parallel_distance_matrix(data, metric='cosine', axis='row', n_jobs=-1):
 
 # Generate a large test matrix
 np.random.seed(42)
-large_matrix = np.random.rand(20000, 200)
+large_matrix = np.random.rand(20000, 600)
 
 # Measure the time for the parallelized function
 start_time = time.time()

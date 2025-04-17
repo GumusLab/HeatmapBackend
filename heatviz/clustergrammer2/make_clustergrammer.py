@@ -15,7 +15,7 @@ import numpy as np
 from scipy.spatial.distance import pdist, squareform
 
 
-def make_cluster(data=None,assay_type='None',val_scale='None',results_file=False,sampleMetadata=None):
+def make_cluster(data=None,assay_type='None',val_scale='Zscore',results_file=False,sampleMetadata=None):
 
     # if not results_file and assay_type != 'rnaseq':
     #     row_categories = []
@@ -36,10 +36,18 @@ def make_cluster(data=None,assay_type='None',val_scale='None',results_file=False
     # profiler.enable()
 
     net = Network()
-    net.load_df(data)
+    # file_content = data.read().decode("utf-8")  # Assuming the file is UTF-8 encoded
 
-    # if val_scale == 'Zscore':
-    #     net.normalize(norm_type='zscore', axis='row', keep_orig=False)
+    try:
+        print("Attempting to load file...")
+        net.load_file(data)
+        print("File loaded successfully")
+    except Exception as e:
+        print(f"An error occurred: {e}")
+    if val_scale == 'Zscore':
+        # net.normalize(norm_type='zscore', axis='row', keep_orig=False)
+        net.normalize(norm_type='zscore', axis='row')
+
 
     # if not results_file and assay_type != 'rnaseq':
     #     net.add_cats(axis='row', cat_data=row_cat_data)

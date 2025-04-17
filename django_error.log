@@ -1,0 +1,150 @@
+ERROR 2025-04-15 13:38:17,017 views 24394 12935262208 Error processing file: normalize() got an unexpected keyword argument 'keep_orig'
+Traceback (most recent call last):
+  File "/Users/kevinulrich/Desktop/HeatmapTool/Backend/HeatmapBackend/heatviz/views.py", line 78, in process_data_view
+    response_data = make_cluster(temp_file_path)
+  File "/Users/kevinulrich/Desktop/HeatmapTool/Backend/HeatmapBackend/heatviz/clustergrammer2/make_clustergrammer.py", line 48, in make_cluster
+    net.normalize(norm_type='zscore', axis='row', keep_orig=False)
+TypeError: normalize() got an unexpected keyword argument 'keep_orig'
+
+ERROR 2025-04-15 13:38:17,018 log 24394 12935262208 Internal Server Error: /api/heatmapdata/process/
+ERROR 2025-04-15 13:38:17,018 views 24394 12968914944 Error processing file: normalize() got an unexpected keyword argument 'keep_orig'
+Traceback (most recent call last):
+  File "/Users/kevinulrich/Desktop/HeatmapTool/Backend/HeatmapBackend/heatviz/views.py", line 78, in process_data_view
+    response_data = make_cluster(temp_file_path)
+  File "/Users/kevinulrich/Desktop/HeatmapTool/Backend/HeatmapBackend/heatviz/clustergrammer2/make_clustergrammer.py", line 48, in make_cluster
+    net.normalize(norm_type='zscore', axis='row', keep_orig=False)
+TypeError: normalize() got an unexpected keyword argument 'keep_orig'
+
+ERROR 2025-04-15 13:38:17,018 basehttp 24394 12935262208 "POST /api/heatmapdata/process/ HTTP/1.1" 500 605
+ERROR 2025-04-15 13:38:17,018 log 24394 12968914944 Internal Server Error: /api/heatmapdata/process/
+ERROR 2025-04-15 13:38:17,019 basehttp 24394 12968914944 "POST /api/heatmapdata/process/ HTTP/1.1" 500 605
+ERROR 2025-04-15 13:38:17,020 views 24394 12952088576 Error processing file: normalize() got an unexpected keyword argument 'keep_orig'
+Traceback (most recent call last):
+  File "/Users/kevinulrich/Desktop/HeatmapTool/Backend/HeatmapBackend/heatviz/views.py", line 78, in process_data_view
+    response_data = make_cluster(temp_file_path)
+  File "/Users/kevinulrich/Desktop/HeatmapTool/Backend/HeatmapBackend/heatviz/clustergrammer2/make_clustergrammer.py", line 48, in make_cluster
+    net.normalize(norm_type='zscore', axis='row', keep_orig=False)
+TypeError: normalize() got an unexpected keyword argument 'keep_orig'
+
+ERROR 2025-04-15 13:38:17,021 log 24394 12952088576 Internal Server Error: /api/heatmapdata/process/
+ERROR 2025-04-15 13:38:17,021 basehttp 24394 12952088576 "POST /api/heatmapdata/process/ HTTP/1.1" 500 605
+ERROR 2025-04-15 16:00:21,441 views 25643 13197406208 Error processing file: can only concatenate str (not "float") to str
+Traceback (most recent call last):
+  File "/Users/kevinulrich/Desktop/HeatmapTool/Backend/HeatmapBackend/heatviz/views.py", line 78, in process_data_view
+    response_data = make_cluster(temp_file_path)
+  File "/Users/kevinulrich/Desktop/HeatmapTool/Backend/HeatmapBackend/heatviz/clustergrammer2/make_clustergrammer.py", line 49, in make_cluster
+    net.normalize(norm_type='zscore', axis='row')
+  File "/Users/kevinulrich/Desktop/HeatmapTool/Backend/HeatmapBackend/heatviz/clustergrammer2/clustergrammer_fun/__init__.py", line 484, in normalize
+    normalize_fun.run_norm(self, df, norm_type, axis, z_clip)
+  File "/Users/kevinulrich/Desktop/HeatmapTool/Backend/HeatmapBackend/heatviz/clustergrammer2/clustergrammer_fun/normalize_fun.py", line 15, in run_norm
+    df, ser_mean, ser_std = zscore_df(df, axis, z_clip=z_clip)
+  File "/Users/kevinulrich/Desktop/HeatmapTool/Backend/HeatmapBackend/heatviz/clustergrammer2/clustergrammer_fun/normalize_fun.py", line 139, in zscore_df
+    ser_mean = df.mean()
+  File "/Users/kevinulrich/anaconda3/envs/heatmapBackend/lib/python3.8/site-packages/pandas/core/generic.py", line 11556, in mean
+    return NDFrame.mean(self, axis, skipna, numeric_only, **kwargs)
+  File "/Users/kevinulrich/anaconda3/envs/heatmapBackend/lib/python3.8/site-packages/pandas/core/generic.py", line 11201, in mean
+    return self._stat_function(
+  File "/Users/kevinulrich/anaconda3/envs/heatmapBackend/lib/python3.8/site-packages/pandas/core/generic.py", line 11158, in _stat_function
+    return self._reduce(
+  File "/Users/kevinulrich/anaconda3/envs/heatmapBackend/lib/python3.8/site-packages/pandas/core/frame.py", line 10519, in _reduce
+    res = df._mgr.reduce(blk_func)
+  File "/Users/kevinulrich/anaconda3/envs/heatmapBackend/lib/python3.8/site-packages/pandas/core/internals/managers.py", line 1534, in reduce
+    nbs = blk.reduce(func)
+  File "/Users/kevinulrich/anaconda3/envs/heatmapBackend/lib/python3.8/site-packages/pandas/core/internals/blocks.py", line 339, in reduce
+    result = func(self.values)
+  File "/Users/kevinulrich/anaconda3/envs/heatmapBackend/lib/python3.8/site-packages/pandas/core/frame.py", line 10482, in blk_func
+    return op(values, axis=axis, skipna=skipna, **kwds)
+  File "/Users/kevinulrich/anaconda3/envs/heatmapBackend/lib/python3.8/site-packages/pandas/core/nanops.py", line 96, in _f
+    return f(*args, **kwargs)
+  File "/Users/kevinulrich/anaconda3/envs/heatmapBackend/lib/python3.8/site-packages/pandas/core/nanops.py", line 158, in f
+    result = alt(values, axis=axis, skipna=skipna, **kwds)
+  File "/Users/kevinulrich/anaconda3/envs/heatmapBackend/lib/python3.8/site-packages/pandas/core/nanops.py", line 421, in new_func
+    result = func(values, axis=axis, skipna=skipna, mask=mask, **kwargs)
+  File "/Users/kevinulrich/anaconda3/envs/heatmapBackend/lib/python3.8/site-packages/pandas/core/nanops.py", line 727, in nanmean
+    the_sum = _ensure_numeric(values.sum(axis, dtype=dtype_sum))
+  File "/Users/kevinulrich/anaconda3/envs/heatmapBackend/lib/python3.8/site-packages/numpy/core/_methods.py", line 49, in _sum
+    return umr_sum(a, axis, dtype, out, keepdims, initial, where)
+TypeError: can only concatenate str (not "float") to str
+
+ERROR 2025-04-15 16:00:21,441 views 25643 13153366016 Error processing file: can only concatenate str (not "float") to str
+Traceback (most recent call last):
+  File "/Users/kevinulrich/Desktop/HeatmapTool/Backend/HeatmapBackend/heatviz/views.py", line 78, in process_data_view
+    response_data = make_cluster(temp_file_path)
+  File "/Users/kevinulrich/Desktop/HeatmapTool/Backend/HeatmapBackend/heatviz/clustergrammer2/make_clustergrammer.py", line 49, in make_cluster
+    net.normalize(norm_type='zscore', axis='row')
+  File "/Users/kevinulrich/Desktop/HeatmapTool/Backend/HeatmapBackend/heatviz/clustergrammer2/clustergrammer_fun/__init__.py", line 484, in normalize
+    normalize_fun.run_norm(self, df, norm_type, axis, z_clip)
+  File "/Users/kevinulrich/Desktop/HeatmapTool/Backend/HeatmapBackend/heatviz/clustergrammer2/clustergrammer_fun/normalize_fun.py", line 15, in run_norm
+    df, ser_mean, ser_std = zscore_df(df, axis, z_clip=z_clip)
+  File "/Users/kevinulrich/Desktop/HeatmapTool/Backend/HeatmapBackend/heatviz/clustergrammer2/clustergrammer_fun/normalize_fun.py", line 139, in zscore_df
+    ser_mean = df.mean()
+  File "/Users/kevinulrich/anaconda3/envs/heatmapBackend/lib/python3.8/site-packages/pandas/core/generic.py", line 11556, in mean
+    return NDFrame.mean(self, axis, skipna, numeric_only, **kwargs)
+  File "/Users/kevinulrich/anaconda3/envs/heatmapBackend/lib/python3.8/site-packages/pandas/core/generic.py", line 11201, in mean
+    return self._stat_function(
+  File "/Users/kevinulrich/anaconda3/envs/heatmapBackend/lib/python3.8/site-packages/pandas/core/generic.py", line 11158, in _stat_function
+    return self._reduce(
+  File "/Users/kevinulrich/anaconda3/envs/heatmapBackend/lib/python3.8/site-packages/pandas/core/frame.py", line 10519, in _reduce
+    res = df._mgr.reduce(blk_func)
+  File "/Users/kevinulrich/anaconda3/envs/heatmapBackend/lib/python3.8/site-packages/pandas/core/internals/managers.py", line 1534, in reduce
+    nbs = blk.reduce(func)
+  File "/Users/kevinulrich/anaconda3/envs/heatmapBackend/lib/python3.8/site-packages/pandas/core/internals/blocks.py", line 339, in reduce
+    result = func(self.values)
+  File "/Users/kevinulrich/anaconda3/envs/heatmapBackend/lib/python3.8/site-packages/pandas/core/frame.py", line 10482, in blk_func
+    return op(values, axis=axis, skipna=skipna, **kwds)
+  File "/Users/kevinulrich/anaconda3/envs/heatmapBackend/lib/python3.8/site-packages/pandas/core/nanops.py", line 96, in _f
+    return f(*args, **kwargs)
+  File "/Users/kevinulrich/anaconda3/envs/heatmapBackend/lib/python3.8/site-packages/pandas/core/nanops.py", line 158, in f
+    result = alt(values, axis=axis, skipna=skipna, **kwds)
+  File "/Users/kevinulrich/anaconda3/envs/heatmapBackend/lib/python3.8/site-packages/pandas/core/nanops.py", line 421, in new_func
+    result = func(values, axis=axis, skipna=skipna, mask=mask, **kwargs)
+  File "/Users/kevinulrich/anaconda3/envs/heatmapBackend/lib/python3.8/site-packages/pandas/core/nanops.py", line 727, in nanmean
+    the_sum = _ensure_numeric(values.sum(axis, dtype=dtype_sum))
+  File "/Users/kevinulrich/anaconda3/envs/heatmapBackend/lib/python3.8/site-packages/numpy/core/_methods.py", line 49, in _sum
+    return umr_sum(a, axis, dtype, out, keepdims, initial, where)
+TypeError: can only concatenate str (not "float") to str
+
+ERROR 2025-04-15 16:00:21,441 views 25643 13170192384 Error processing file: can only concatenate str (not "float") to str
+Traceback (most recent call last):
+  File "/Users/kevinulrich/Desktop/HeatmapTool/Backend/HeatmapBackend/heatviz/views.py", line 78, in process_data_view
+    response_data = make_cluster(temp_file_path)
+  File "/Users/kevinulrich/Desktop/HeatmapTool/Backend/HeatmapBackend/heatviz/clustergrammer2/make_clustergrammer.py", line 49, in make_cluster
+    net.normalize(norm_type='zscore', axis='row')
+  File "/Users/kevinulrich/Desktop/HeatmapTool/Backend/HeatmapBackend/heatviz/clustergrammer2/clustergrammer_fun/__init__.py", line 484, in normalize
+    normalize_fun.run_norm(self, df, norm_type, axis, z_clip)
+  File "/Users/kevinulrich/Desktop/HeatmapTool/Backend/HeatmapBackend/heatviz/clustergrammer2/clustergrammer_fun/normalize_fun.py", line 15, in run_norm
+    df, ser_mean, ser_std = zscore_df(df, axis, z_clip=z_clip)
+  File "/Users/kevinulrich/Desktop/HeatmapTool/Backend/HeatmapBackend/heatviz/clustergrammer2/clustergrammer_fun/normalize_fun.py", line 139, in zscore_df
+    ser_mean = df.mean()
+  File "/Users/kevinulrich/anaconda3/envs/heatmapBackend/lib/python3.8/site-packages/pandas/core/generic.py", line 11556, in mean
+    return NDFrame.mean(self, axis, skipna, numeric_only, **kwargs)
+  File "/Users/kevinulrich/anaconda3/envs/heatmapBackend/lib/python3.8/site-packages/pandas/core/generic.py", line 11201, in mean
+    return self._stat_function(
+  File "/Users/kevinulrich/anaconda3/envs/heatmapBackend/lib/python3.8/site-packages/pandas/core/generic.py", line 11158, in _stat_function
+    return self._reduce(
+  File "/Users/kevinulrich/anaconda3/envs/heatmapBackend/lib/python3.8/site-packages/pandas/core/frame.py", line 10519, in _reduce
+    res = df._mgr.reduce(blk_func)
+  File "/Users/kevinulrich/anaconda3/envs/heatmapBackend/lib/python3.8/site-packages/pandas/core/internals/managers.py", line 1534, in reduce
+    nbs = blk.reduce(func)
+  File "/Users/kevinulrich/anaconda3/envs/heatmapBackend/lib/python3.8/site-packages/pandas/core/internals/blocks.py", line 339, in reduce
+    result = func(self.values)
+  File "/Users/kevinulrich/anaconda3/envs/heatmapBackend/lib/python3.8/site-packages/pandas/core/frame.py", line 10482, in blk_func
+    return op(values, axis=axis, skipna=skipna, **kwds)
+  File "/Users/kevinulrich/anaconda3/envs/heatmapBackend/lib/python3.8/site-packages/pandas/core/nanops.py", line 96, in _f
+    return f(*args, **kwargs)
+  File "/Users/kevinulrich/anaconda3/envs/heatmapBackend/lib/python3.8/site-packages/pandas/core/nanops.py", line 158, in f
+    result = alt(values, axis=axis, skipna=skipna, **kwds)
+  File "/Users/kevinulrich/anaconda3/envs/heatmapBackend/lib/python3.8/site-packages/pandas/core/nanops.py", line 421, in new_func
+    result = func(values, axis=axis, skipna=skipna, mask=mask, **kwargs)
+  File "/Users/kevinulrich/anaconda3/envs/heatmapBackend/lib/python3.8/site-packages/pandas/core/nanops.py", line 727, in nanmean
+    the_sum = _ensure_numeric(values.sum(axis, dtype=dtype_sum))
+  File "/Users/kevinulrich/anaconda3/envs/heatmapBackend/lib/python3.8/site-packages/numpy/core/_methods.py", line 49, in _sum
+    return umr_sum(a, axis, dtype, out, keepdims, initial, where)
+TypeError: can only concatenate str (not "float") to str
+
+ERROR 2025-04-15 16:00:21,442 log 25643 13197406208 Internal Server Error: /api/heatmapdata/process/
+ERROR 2025-04-15 16:00:21,443 log 25643 13153366016 Internal Server Error: /api/heatmapdata/process/
+ERROR 2025-04-15 16:00:21,443 log 25643 13170192384 Internal Server Error: /api/heatmapdata/process/
+ERROR 2025-04-15 16:00:21,443 basehttp 25643 13153366016 "POST /api/heatmapdata/process/ HTTP/1.1" 500 3381
+ERROR 2025-04-15 16:00:21,443 basehttp 25643 13197406208 "POST /api/heatmapdata/process/ HTTP/1.1" 500 3381
+ERROR 2025-04-15 16:00:21,443 basehttp 25643 13170192384 "POST /api/heatmapdata/process/ HTTP/1.1" 500 3381

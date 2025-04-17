@@ -8,6 +8,10 @@ def viz_json(net, dendro=True, links=False):
   net.viz['linkage']['row'] = net.dat['node_info']['row']['Y'].tolist()
   net.viz['linkage']['col'] = net.dat['node_info']['col']['Y'].tolist()
 
+  print('****** nodes are as follows *****')
+  print(net.dat['node_info']['row'])
+  all_dist = calc_clust.group_cutoffs()
+
   # node information
   for inst_rc in net.dat['nodes']:
 
@@ -49,6 +53,14 @@ def viz_json(net, dendro=True, links=False):
       if len(net.dat['node_info'][inst_rc]['info']) > 0:
         inst_dict['info'] = net.dat['node_info'][inst_rc]['info'][i]
 
+      if dendro is True:
+        inst_dict['group'] = []
+        for tmp_dist in all_dist:
+          tmp_dist = str(tmp_dist).replace('.', '')
+          tmp_append = float(
+              net.dat['node_info'][inst_rc]['group'][tmp_dist][i])
+          inst_dict['group'].append(tmp_append)
+
       net.viz[inst_rc + '_nodes'].append(inst_dict)
 
   # save data as links or mat
@@ -69,3 +81,4 @@ def viz_json(net, dendro=True, links=False):
 
   else:
     net.viz['mat'] = net.dat['mat'].tolist()
+

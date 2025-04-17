@@ -56,8 +56,13 @@ def load_tsv_to_net(net, file_buffer, filename=None):
   lines = file_buffer.getvalue().split('\n')
   num_labels = categories.check_categories(lines)
 
+  print(' ******* num labels are as follows *****', num_labels)
+
   row_arr = list(range(num_labels['row']))
   col_arr = list(range(num_labels['col']))
+
+  print(row_arr)
+  print(col_arr)
 
   # use header if there are col categories
   if len(col_arr) > 1:
@@ -67,6 +72,18 @@ def load_tsv_to_net(net, file_buffer, filename=None):
     df = pd.read_table(file_buffer, index_col=row_arr)
 
   df = proc_df_labels.main(df)
+
+  print(f"📏 DataFrame shape before reducing columns: {df.shape}")
+
+# **Reduce the number of columns to half**
+  # num_cols = df.shape[1]  # Get total columns
+  # df = df.iloc[:, :num_cols // 2]  # Select only the first third of the columns
+
+  # # **Take only the first 1000 rows**
+  # df = df.iloc[:4000, :]
+
+  # print(f"📏 DataFrame shape after reducing columns: {df.shape}")
+  # print(f'****** df is as follows ***** {df}')
 
   net.df_to_dat(df, True)
   net.dat['filename'] = filename
