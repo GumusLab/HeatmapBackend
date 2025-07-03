@@ -128,12 +128,46 @@ def dict_cat(net, define_cat_colors=False):
 
             inst_dict = net.viz['cat_colors'][axis][cat_index]
 
+            # for inst_full_name in inst_dict:
+
+            #     inst_name = inst_full_name.split(': ')[1]
+            #     inst_color = inst_dict[inst_full_name]
+
+            #     global_cat_colors[inst_name] = inst_color
+
             for inst_full_name in inst_dict:
-
-                inst_name = inst_full_name.split(': ')[1]
-                inst_color = inst_dict[inst_full_name]
-
-                global_cat_colors[inst_name] = inst_color
+              # 🔍 DEBUG CODE
+              print(f"🔍 PROCESSING CATEGORY NAME:")
+              print(f"   inst_full_name: {repr(inst_full_name)}")
+              print(f"   Type: {type(inst_full_name)}")
+              print(f"   Contains ': ': {': ' in str(inst_full_name)}")
+              print(f"   Contains ':': {':' in str(inst_full_name)}")
+              
+              if ': ' in str(inst_full_name):
+                  split_parts = str(inst_full_name).split(': ')
+                  print(f"   Split on ': ' gives: {split_parts}")
+                  print(f"   Number of parts: {len(split_parts)}")
+                  if len(split_parts) >= 2:
+                      print(f"   Will use part [1]: {repr(split_parts[1])}")
+                  else:
+                      print(f"   ❌ ERROR: Not enough parts after split!")
+              else:
+                  print(f"   ❌ ERROR: No ': ' separator found!")
+              
+              # Original failing line (temporarily commented out)
+              # inst_name = inst_full_name.split(': ')[1]
+              
+              # Safer version
+              try:
+                  inst_name = inst_full_name.split(': ')[1]
+                  print(f"   ✅ Successfully extracted: {repr(inst_name)}")
+              except IndexError as e:
+                  print(f"   ❌ SPLIT FAILED: {e}")
+                  print(f"   Using fallback...")
+                  inst_name = str(inst_full_name)  # Use the full name as fallback
+              
+              inst_color = inst_dict[inst_full_name]
+              global_cat_colors[inst_name] = inst_color
 
     net.viz['global_cat_colors'] = global_cat_colors
 

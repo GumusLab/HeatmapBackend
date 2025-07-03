@@ -3,12 +3,19 @@ import scipy
 from . import calc_clust, run_filter, make_sim_mat, cat_pval
 from . import enrichr_functions as enr_fun
 
+# def make_clust(net, dist_type='cosine', run_clustering=True, dendro=True,
+#                           requested_views=['pct_row_sum', 'N_row_sum'],
+#                           linkage_type='average', sim_mat=False, filter_sim=0.0,
+#                           calc_cat_pval=False, sim_mat_views=['N_row_sum'],
+#                           run_enrichr=None, enrichrgram=None, clust_library='scipy',
+#                           min_samples=1, min_cluster_size=2):
 def make_clust(net, dist_type='cosine', run_clustering=True, dendro=True,
-                          requested_views=['pct_row_sum', 'N_row_sum'],
-                          linkage_type='average', sim_mat=False, filter_sim=0.0,
-                          calc_cat_pval=False, sim_mat_views=['N_row_sum'],
-                          run_enrichr=None, enrichrgram=None, clust_library='scipy',
-                          min_samples=1, min_cluster_size=2):
+                      requested_views=['pct_row_sum', 'N_row_sum'],
+                      linkage_type='average', sim_mat=False, filter_sim=0.0,
+                      calc_cat_pval=False, sim_mat_views=['N_row_sum'],
+                      run_enrichr=None, enrichrgram=None, clust_library='scipy',
+                      min_samples=1, min_cluster_size=2,
+                      imputation_method='auto', **imputation_kwargs): # <-- ADD THESE
   '''
   This will perform hierarchical clustering
   '''
@@ -23,14 +30,25 @@ def make_clust(net, dist_type='cosine', run_clustering=True, dendro=True,
     define_cat_colors = True
     net.df_to_dat(df, define_cat_colors=True)
 
+  # inst_dm = calc_clust.cluster_row_and_col(net, dist_type=dist_type,
+  #                               linkage_type=linkage_type,
+  #                               run_clustering=run_clustering,
+  #                               dendro=dendro, ignore_cat=False,
+  #                               calc_cat_pval=calc_cat_pval,
+  #                               clust_library=clust_library,
+  #                               min_samples=min_samples,
+  #                               min_cluster_size=min_cluster_size)
+
   inst_dm = calc_clust.cluster_row_and_col(net, dist_type=dist_type,
-                                linkage_type=linkage_type,
-                                run_clustering=run_clustering,
-                                dendro=dendro, ignore_cat=False,
-                                calc_cat_pval=calc_cat_pval,
-                                clust_library=clust_library,
-                                min_samples=min_samples,
-                                min_cluster_size=min_cluster_size)
+                              linkage_type=linkage_type,
+                              run_clustering=run_clustering,
+                              dendro=dendro, ignore_cat=False,
+                              calc_cat_pval=calc_cat_pval,
+                              clust_library=clust_library,
+                              min_samples=min_samples,
+                              min_cluster_size=min_cluster_size,
+                              imputation_method=imputation_method, # <-- PASS IT
+                              **imputation_kwargs)                 # <-- PASS IT
 
   which_sim = []
 

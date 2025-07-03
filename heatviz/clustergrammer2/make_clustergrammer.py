@@ -15,56 +15,106 @@ import numpy as np
 from scipy.spatial.distance import pdist, squareform
 
 
-def make_cluster(data=None,assay_type='None',val_scale='Zscore',results_file=False,sampleMetadata=None):
+# def make_cluster(data=None,assay_type='None',val_scale='Zscore',results_file=False,sampleMetadata=None):
 
-    # if not results_file and assay_type != 'rnaseq':
-    #     row_categories = []
-    #     if assay_type == 'cytof':
-    #         row_categories.append('parent')
 
-    #     if sampleMetadata:
-    #         firstKey = list(sampleMetadata.keys())[0]
-    #         print(firstKey)
-    #         col_categories = list(sampleMetadata[firstKey].keys())
-        
-    #     column_categories,col_cat_data,row_categories,row_cat_data = csv_to_categories(data,col_categories,row_categories,sampleMetadata)
-    # Start profiling
+#     net = Network()
+#     # file_content = data.read().decode("utf-8")  # Assuming the file is UTF-8 encoded
+
+#     try:
+#         print("Attempting to load file...")
+#         net.load_file(data)
+#         print("File loaded successfully")
+#     except Exception as e:
+#         print(f"An error occurred: {e}")
+#     if val_scale == 'Zscore':
+#         # net.normalize(norm_type='zscore', axis='row', keep_orig=False)
+#         net.normalize(norm_type='zscore', axis='row')
+
+
+#     net.cluster(dist_type='cos', dendro=True,
+#                 sim_mat=False, filter_sim=0.1, calc_cat_pval=False, enrichrgram=False)
     
-    # data = pd.read_csv('./txt/random_dataset.csv',index_col=0)
-    # data = pd.read_csv('./txt/cytof_output.csv',index_col=0)
-    # profiler = cProfile.Profile()
-    # profiler.enable()
+    
+#     return net.export_net_json(net_type='viz', indent='no-indent')
 
+
+
+def make_cluster(data=None, assay_type='None', val_scale='Zscore', results_file=False,sampleMetadata=None, imputation_method='auto', **imputation_kwargs):    
+    
     net = Network()
-    # file_content = data.read().decode("utf-8")  # Assuming the file is UTF-8 encoded
-
-    try:
-        print("Attempting to load file...")
-        net.load_file(data)
-        print("File loaded successfully")
-    except Exception as e:
-        print(f"An error occurred: {e}")
-    if val_scale == 'Zscore':
-        # net.normalize(norm_type='zscore', axis='row', keep_orig=False)
-        net.normalize(norm_type='zscore', axis='row')
-
-
-    # if not results_file and assay_type != 'rnaseq':
-    #     net.add_cats(axis='row', cat_data=row_cat_data)
-    #     net.add_cats(axis='col', cat_data=col_cat_data)
-
-    # profiler = cProfile.Profile()
-    # profiler.enable()
-
-    net.cluster(dist_type='cos', dendro=True,
-                sim_mat=False, filter_sim=0.1, calc_cat_pval=False, enrichrgram=True)
     
-    # Stop profiling
-    # profiler.disable()
-
-    # Print profiling results
-    # profiler_stats = pstats.Stats(profiler).sort_stats('cumtime')
-    # profiler_stats.print_stats(10)  # Print top 10 results
+    try:
+        print("Attempting to load data directly into network...")
+        
+        if isinstance(data, pd.DataFrame):
+            # Check for and fix unnamed columns
+            df = data.copy()
+            print(df)
+            
+            # Create a column list with empty strings for the metadata columns
+            columns = []
+            for i, col in enumerate(df.columns):
+                if 'unnamed' in str(col).lower():
+                    # Replace 'Unnamed: X' with empty string
+                    columns.append('')
+                else:
+                    columns.append(col)
+            
+            # Convert to a TSV string with blank headers for unnamed columns
+            from io import StringIO
+            buffer = StringIO()
+            
+            # First save as TSV with custom column names
+            header_row = '\t'.join(columns)
+            buffer.write(header_row + '\n')
+            
+            # Then write the data without header
+            data_buffer = StringIO()
+            df.to_csv(data_buffer, sep='\t', index=False, header=False)
+            buffer.write(data_buffer.getvalue())
+            
+            # Load the TSV with proper column handling
+            buffer.seek(0)
+            net.load_tsv_to_net(buffer)
+            
+        elif isinstance(data, str):
+            # Assuming 'data' is a string path or raw TSV content
+            if "\t" in data or "\n" in data:  # Looks like raw content
+                from io import StringIO
+                net.load_tsv_to_net(StringIO(data))
+            else:
+                net.load_file(data)  # Assume it's a file path
+        else:
+            raise ValueError("Unsupported data type for make_cluster.")
+        
+        print("Data loaded successfully.")
+    except Exception as e:
+        print(f"❌ An error occurred while loading data: {e}")
+        return {"error": str(e)}
+    
+    if val_scale == 'Zscore':
+        net.normalize(norm_type='zscore', axis='row')
+    
+    try:
+        # net.cluster(dist_type='cos', dendro=True, sim_mat=False, filter_sim=0.1, clust_library = 'fastcluster', calc_cat_pval=False, enrichrgram=False,imputation_method='knn')
+        net.cluster(
+            dist_type='cos', 
+            dendro=True, 
+            sim_mat=False, 
+            filter_sim=0.1, 
+            # clust_library='fastcluster', 
+            calc_cat_pval=False, 
+            enrichrgram=False,
+            imputation_method=imputation_method,  # Pass the selected method
+            **imputation_kwargs  # Pass all strategy-specific parameters
+        )
+        print("✅ Clustering completed successfully")
+    except Exception as e:
+        print(f"❌ Error during clustering: {e}")
+        import traceback
+        traceback.print_exc()
+        return {"error": str(e)}
     
     return net.export_net_json(net_type='viz', indent='no-indent')
 

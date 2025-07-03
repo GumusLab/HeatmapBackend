@@ -28,6 +28,8 @@ schema_view = get_schema_view(
 def api_root(request, format=None):
     return Response({
         'heatmapdata': reverse('process-data', request=request, format=format),
+        'cleanup-session': reverse('cleanup-session', request=request, format=format),
+        'command-execution': reverse('command-execution', request=request, format=format),
     })
 
 urlpatterns = [

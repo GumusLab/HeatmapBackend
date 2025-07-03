@@ -26,7 +26,14 @@ SECRET_KEY = 'django-insecure-9-obe0+p-lyqf$fvgypjb&rk^rzibu8$bk2z2ln-%-=^!)nk*z
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+# ALLOWED_HOSTS = []
+ALLOWED_HOSTS = [
+    'rawalo01.u.hpc.mssm.edu',
+    'rawalo01.dmz.hpc.mssm.edu',
+    'clusterchirp.mssm.edu',
+    'localhost',
+    '127.0.0.1',
+]
 
 # Application definition
 

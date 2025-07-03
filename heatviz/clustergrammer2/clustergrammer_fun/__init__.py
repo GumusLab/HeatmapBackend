@@ -87,11 +87,17 @@ class Network(object):
     inst_dat = self.load_json_to_dict(filename)
     load_data.load_data_to_net(self, inst_dat)
 
+  # def cluster(self, dist_type='cosine', run_clustering=True,
+  #                dendro=True, views=[],
+  #                linkage_type='average', sim_mat=False, filter_sim=0.0,
+  #                calc_cat_pval=False, run_enrichr=None, enrichrgram=None,
+  #                clust_library='scipy', min_samples=1, min_cluster_size=2):
   def cluster(self, dist_type='cosine', run_clustering=True,
-                 dendro=True, views=[],
-                 linkage_type='average', sim_mat=False, filter_sim=0.0,
-                 calc_cat_pval=False, run_enrichr=None, enrichrgram=None,
-                 clust_library='scipy', min_samples=1, min_cluster_size=2):
+             dendro=True, views=[],
+             linkage_type='average', sim_mat=False, filter_sim=0.0,
+             calc_cat_pval=False, run_enrichr=None, enrichrgram=None,
+             clust_library='scipy', min_samples=1, min_cluster_size=2,
+             imputation_method='auto', **imputation_kwargs): # <-- ADD THESE
     '''
     The main function performs hierarchical clustering, optionally generates
     filtered views (e.g. row-filtered views), and generates the :
@@ -101,6 +107,21 @@ class Network(object):
     '''
     initialize_net.viz(self)
 
+    # make_clust_fun.make_clust(self, dist_type=dist_type,
+    #                                 run_clustering=run_clustering,
+    #                                 dendro=dendro,
+    #                                 requested_views=views,
+    #                                 linkage_type=linkage_type,
+    #                                 sim_mat=sim_mat,
+    #                                 filter_sim=filter_sim,
+    #                                 calc_cat_pval=calc_cat_pval,
+    #                                 run_enrichr=run_enrichr,
+    #                                 enrichrgram=enrichrgram,
+    #                                 clust_library=clust_library,
+    #                                 min_samples=min_samples,
+    #                                 min_cluster_size=min_cluster_size)
+    
+    # Inside the cluster method...
     make_clust_fun.make_clust(self, dist_type=dist_type,
                                     run_clustering=run_clustering,
                                     dendro=dendro,
@@ -113,7 +134,9 @@ class Network(object):
                                     enrichrgram=enrichrgram,
                                     clust_library=clust_library,
                                     min_samples=min_samples,
-                                    min_cluster_size=min_cluster_size)
+                                    min_cluster_size=min_cluster_size,
+                                    imputation_method=imputation_method, # <-- PASS IT
+                                    **imputation_kwargs)                 # <-- PASS IT
 
   def swap_nan_for_zero(self):
     '''

@@ -148,3 +148,797 @@ ERROR 2025-04-15 16:00:21,443 log 25643 13170192384 Internal Server Error: /api/
 ERROR 2025-04-15 16:00:21,443 basehttp 25643 13153366016 "POST /api/heatmapdata/process/ HTTP/1.1" 500 3381
 ERROR 2025-04-15 16:00:21,443 basehttp 25643 13197406208 "POST /api/heatmapdata/process/ HTTP/1.1" 500 3381
 ERROR 2025-04-15 16:00:21,443 basehttp 25643 13170192384 "POST /api/heatmapdata/process/ HTTP/1.1" 500 3381
+ERROR 2025-05-07 18:57:24,932 views 47027 12918484992 Error processing file: The condensed distance matrix must contain only finite values.
+Traceback (most recent call last):
+  File "/Users/kevinulrich/Desktop/HeatmapTool/Backend/HeatmapBackend/heatviz/views.py", line 78, in process_data_view
+    response_data = make_cluster(temp_file_path)
+  File "/Users/kevinulrich/Desktop/HeatmapTool/Backend/HeatmapBackend/heatviz/clustergrammer2/make_clustergrammer.py", line 59, in make_cluster
+    net.cluster(dist_type='cos', dendro=True,
+  File "/Users/kevinulrich/Desktop/HeatmapTool/Backend/HeatmapBackend/heatviz/clustergrammer2/clustergrammer_fun/__init__.py", line 104, in cluster
+    make_clust_fun.make_clust(self, dist_type=dist_type,
+  File "/Users/kevinulrich/Desktop/HeatmapTool/Backend/HeatmapBackend/heatviz/clustergrammer2/clustergrammer_fun/make_clust_fun.py", line 26, in make_clust
+    inst_dm = calc_clust.cluster_row_and_col(net, dist_type=dist_type,
+  File "/Users/kevinulrich/Desktop/HeatmapTool/Backend/HeatmapBackend/heatviz/clustergrammer2/clustergrammer_fun/calc_clust.py", line 51, in cluster_row_and_col
+    node_info['clust'], node_info['Y'],  node_info['group'] = clust_and_group(net,
+  File "/Users/kevinulrich/Desktop/HeatmapTool/Backend/HeatmapBackend/heatviz/clustergrammer2/clustergrammer_fun/calc_clust.py", line 251, in clust_and_group
+    Y = hier.linkage(inst_dm, method=linkage_type)
+  File "/Users/kevinulrich/anaconda3/envs/heatmapBackend/lib/python3.8/site-packages/scipy/cluster/hierarchy.py", line 1065, in linkage
+    raise ValueError("The condensed distance matrix must contain only "
+ValueError: The condensed distance matrix must contain only finite values.
+
+ERROR 2025-05-07 18:57:24,938 log 47027 12918484992 Internal Server Error: /api/heatmapdata/process/
+ERROR 2025-05-07 18:57:24,939 basehttp 47027 12918484992 "POST /api/heatmapdata/process/ HTTP/1.1" 500 1708
+ERROR 2025-05-07 18:57:24,941 views 47027 12952137728 Error processing file: The condensed distance matrix must contain only finite values.
+Traceback (most recent call last):
+  File "/Users/kevinulrich/Desktop/HeatmapTool/Backend/HeatmapBackend/heatviz/views.py", line 78, in process_data_view
+    response_data = make_cluster(temp_file_path)
+  File "/Users/kevinulrich/Desktop/HeatmapTool/Backend/HeatmapBackend/heatviz/clustergrammer2/make_clustergrammer.py", line 59, in make_cluster
+    net.cluster(dist_type='cos', dendro=True,
+  File "/Users/kevinulrich/Desktop/HeatmapTool/Backend/HeatmapBackend/heatviz/clustergrammer2/clustergrammer_fun/__init__.py", line 104, in cluster
+    make_clust_fun.make_clust(self, dist_type=dist_type,
+  File "/Users/kevinulrich/Desktop/HeatmapTool/Backend/HeatmapBackend/heatviz/clustergrammer2/clustergrammer_fun/make_clust_fun.py", line 26, in make_clust
+    inst_dm = calc_clust.cluster_row_and_col(net, dist_type=dist_type,
+  File "/Users/kevinulrich/Desktop/HeatmapTool/Backend/HeatmapBackend/heatviz/clustergrammer2/clustergrammer_fun/calc_clust.py", line 51, in cluster_row_and_col
+    node_info['clust'], node_info['Y'],  node_info['group'] = clust_and_group(net,
+  File "/Users/kevinulrich/Desktop/HeatmapTool/Backend/HeatmapBackend/heatviz/clustergrammer2/clustergrammer_fun/calc_clust.py", line 251, in clust_and_group
+    Y = hier.linkage(inst_dm, method=linkage_type)
+  File "/Users/kevinulrich/anaconda3/envs/heatmapBackend/lib/python3.8/site-packages/scipy/cluster/hierarchy.py", line 1065, in linkage
+    raise ValueError("The condensed distance matrix must contain only "
+ValueError: The condensed distance matrix must contain only finite values.
+
+ERROR 2025-05-07 18:57:24,947 log 47027 12952137728 Internal Server Error: /api/heatmapdata/process/
+ERROR 2025-05-07 18:57:24,947 basehttp 47027 12952137728 "POST /api/heatmapdata/process/ HTTP/1.1" 500 1708
+ERROR 2025-05-07 18:57:24,948 views 47027 12935311360 Error processing file: The condensed distance matrix must contain only finite values.
+Traceback (most recent call last):
+  File "/Users/kevinulrich/Desktop/HeatmapTool/Backend/HeatmapBackend/heatviz/views.py", line 78, in process_data_view
+    response_data = make_cluster(temp_file_path)
+  File "/Users/kevinulrich/Desktop/HeatmapTool/Backend/HeatmapBackend/heatviz/clustergrammer2/make_clustergrammer.py", line 59, in make_cluster
+    net.cluster(dist_type='cos', dendro=True,
+  File "/Users/kevinulrich/Desktop/HeatmapTool/Backend/HeatmapBackend/heatviz/clustergrammer2/clustergrammer_fun/__init__.py", line 104, in cluster
+    make_clust_fun.make_clust(self, dist_type=dist_type,
+  File "/Users/kevinulrich/Desktop/HeatmapTool/Backend/HeatmapBackend/heatviz/clustergrammer2/clustergrammer_fun/make_clust_fun.py", line 26, in make_clust
+    inst_dm = calc_clust.cluster_row_and_col(net, dist_type=dist_type,
+  File "/Users/kevinulrich/Desktop/HeatmapTool/Backend/HeatmapBackend/heatviz/clustergrammer2/clustergrammer_fun/calc_clust.py", line 51, in cluster_row_and_col
+    node_info['clust'], node_info['Y'],  node_info['group'] = clust_and_group(net,
+  File "/Users/kevinulrich/Desktop/HeatmapTool/Backend/HeatmapBackend/heatviz/clustergrammer2/clustergrammer_fun/calc_clust.py", line 251, in clust_and_group
+    Y = hier.linkage(inst_dm, method=linkage_type)
+  File "/Users/kevinulrich/anaconda3/envs/heatmapBackend/lib/python3.8/site-packages/scipy/cluster/hierarchy.py", line 1065, in linkage
+    raise ValueError("The condensed distance matrix must contain only "
+ValueError: The condensed distance matrix must contain only finite values.
+
+ERROR 2025-05-07 18:57:24,956 log 47027 12935311360 Internal Server Error: /api/heatmapdata/process/
+ERROR 2025-05-07 18:57:24,956 basehttp 47027 12935311360 "POST /api/heatmapdata/process/ HTTP/1.1" 500 1708
+ERROR 2025-05-07 19:04:46,606 views 47027 12935311360 Error processing file: The condensed distance matrix must contain only finite values.
+Traceback (most recent call last):
+  File "/Users/kevinulrich/Desktop/HeatmapTool/Backend/HeatmapBackend/heatviz/views.py", line 78, in process_data_view
+    response_data = make_cluster(temp_file_path)
+  File "/Users/kevinulrich/Desktop/HeatmapTool/Backend/HeatmapBackend/heatviz/clustergrammer2/make_clustergrammer.py", line 59, in make_cluster
+    net.cluster(dist_type='cos', dendro=True,
+  File "/Users/kevinulrich/Desktop/HeatmapTool/Backend/HeatmapBackend/heatviz/clustergrammer2/clustergrammer_fun/__init__.py", line 104, in cluster
+    make_clust_fun.make_clust(self, dist_type=dist_type,
+  File "/Users/kevinulrich/Desktop/HeatmapTool/Backend/HeatmapBackend/heatviz/clustergrammer2/clustergrammer_fun/make_clust_fun.py", line 26, in make_clust
+    inst_dm = calc_clust.cluster_row_and_col(net, dist_type=dist_type,
+  File "/Users/kevinulrich/Desktop/HeatmapTool/Backend/HeatmapBackend/heatviz/clustergrammer2/clustergrammer_fun/calc_clust.py", line 51, in cluster_row_and_col
+    node_info['clust'], node_info['Y'],  node_info['group'] = clust_and_group(net,
+  File "/Users/kevinulrich/Desktop/HeatmapTool/Backend/HeatmapBackend/heatviz/clustergrammer2/clustergrammer_fun/calc_clust.py", line 251, in clust_and_group
+    Y = hier.linkage(inst_dm, method=linkage_type)
+  File "/Users/kevinulrich/anaconda3/envs/heatmapBackend/lib/python3.8/site-packages/scipy/cluster/hierarchy.py", line 1065, in linkage
+    raise ValueError("The condensed distance matrix must contain only "
+ValueError: The condensed distance matrix must contain only finite values.
+
+ERROR 2025-05-07 19:04:46,615 log 47027 12935311360 Internal Server Error: /api/heatmapdata/process/
+ERROR 2025-05-07 19:04:46,615 basehttp 47027 12935311360 "POST /api/heatmapdata/process/ HTTP/1.1" 500 1708
+ERROR 2025-05-07 19:04:46,615 views 47027 12918484992 Error processing file: The condensed distance matrix must contain only finite values.
+Traceback (most recent call last):
+  File "/Users/kevinulrich/Desktop/HeatmapTool/Backend/HeatmapBackend/heatviz/views.py", line 78, in process_data_view
+    response_data = make_cluster(temp_file_path)
+  File "/Users/kevinulrich/Desktop/HeatmapTool/Backend/HeatmapBackend/heatviz/clustergrammer2/make_clustergrammer.py", line 59, in make_cluster
+    net.cluster(dist_type='cos', dendro=True,
+  File "/Users/kevinulrich/Desktop/HeatmapTool/Backend/HeatmapBackend/heatviz/clustergrammer2/clustergrammer_fun/__init__.py", line 104, in cluster
+    make_clust_fun.make_clust(self, dist_type=dist_type,
+  File "/Users/kevinulrich/Desktop/HeatmapTool/Backend/HeatmapBackend/heatviz/clustergrammer2/clustergrammer_fun/make_clust_fun.py", line 26, in make_clust
+    inst_dm = calc_clust.cluster_row_and_col(net, dist_type=dist_type,
+  File "/Users/kevinulrich/Desktop/HeatmapTool/Backend/HeatmapBackend/heatviz/clustergrammer2/clustergrammer_fun/calc_clust.py", line 51, in cluster_row_and_col
+    node_info['clust'], node_info['Y'],  node_info['group'] = clust_and_group(net,
+  File "/Users/kevinulrich/Desktop/HeatmapTool/Backend/HeatmapBackend/heatviz/clustergrammer2/clustergrammer_fun/calc_clust.py", line 251, in clust_and_group
+    Y = hier.linkage(inst_dm, method=linkage_type)
+  File "/Users/kevinulrich/anaconda3/envs/heatmapBackend/lib/python3.8/site-packages/scipy/cluster/hierarchy.py", line 1065, in linkage
+    raise ValueError("The condensed distance matrix must contain only "
+ValueError: The condensed distance matrix must contain only finite values.
+
+ERROR 2025-05-07 19:04:46,621 log 47027 12918484992 Internal Server Error: /api/heatmapdata/process/
+ERROR 2025-05-07 19:04:46,621 basehttp 47027 12918484992 "POST /api/heatmapdata/process/ HTTP/1.1" 500 1708
+ERROR 2025-05-07 19:04:46,638 views 47027 12952137728 Error processing file: The condensed distance matrix must contain only finite values.
+Traceback (most recent call last):
+  File "/Users/kevinulrich/Desktop/HeatmapTool/Backend/HeatmapBackend/heatviz/views.py", line 78, in process_data_view
+    response_data = make_cluster(temp_file_path)
+  File "/Users/kevinulrich/Desktop/HeatmapTool/Backend/HeatmapBackend/heatviz/clustergrammer2/make_clustergrammer.py", line 59, in make_cluster
+    net.cluster(dist_type='cos', dendro=True,
+  File "/Users/kevinulrich/Desktop/HeatmapTool/Backend/HeatmapBackend/heatviz/clustergrammer2/clustergrammer_fun/__init__.py", line 104, in cluster
+    make_clust_fun.make_clust(self, dist_type=dist_type,
+  File "/Users/kevinulrich/Desktop/HeatmapTool/Backend/HeatmapBackend/heatviz/clustergrammer2/clustergrammer_fun/make_clust_fun.py", line 26, in make_clust
+    inst_dm = calc_clust.cluster_row_and_col(net, dist_type=dist_type,
+  File "/Users/kevinulrich/Desktop/HeatmapTool/Backend/HeatmapBackend/heatviz/clustergrammer2/clustergrammer_fun/calc_clust.py", line 51, in cluster_row_and_col
+    node_info['clust'], node_info['Y'],  node_info['group'] = clust_and_group(net,
+  File "/Users/kevinulrich/Desktop/HeatmapTool/Backend/HeatmapBackend/heatviz/clustergrammer2/clustergrammer_fun/calc_clust.py", line 251, in clust_and_group
+    Y = hier.linkage(inst_dm, method=linkage_type)
+  File "/Users/kevinulrich/anaconda3/envs/heatmapBackend/lib/python3.8/site-packages/scipy/cluster/hierarchy.py", line 1065, in linkage
+    raise ValueError("The condensed distance matrix must contain only "
+ValueError: The condensed distance matrix must contain only finite values.
+
+ERROR 2025-05-07 19:04:46,646 log 47027 12952137728 Internal Server Error: /api/heatmapdata/process/
+ERROR 2025-05-07 19:04:46,646 basehttp 47027 12952137728 "POST /api/heatmapdata/process/ HTTP/1.1" 500 1708
+ERROR 2025-05-07 19:07:21,473 views 47160 6328709120 Error processing file: The condensed distance matrix must contain only finite values.
+Traceback (most recent call last):
+  File "/Users/kevinulrich/Desktop/HeatmapTool/Backend/HeatmapBackend/heatviz/views.py", line 78, in process_data_view
+    response_data = make_cluster(temp_file_path)
+  File "/Users/kevinulrich/Desktop/HeatmapTool/Backend/HeatmapBackend/heatviz/clustergrammer2/make_clustergrammer.py", line 59, in make_cluster
+    net.cluster(dist_type='cos', dendro=True,
+  File "/Users/kevinulrich/Desktop/HeatmapTool/Backend/HeatmapBackend/heatviz/clustergrammer2/clustergrammer_fun/__init__.py", line 104, in cluster
+    make_clust_fun.make_clust(self, dist_type=dist_type,
+  File "/Users/kevinulrich/Desktop/HeatmapTool/Backend/HeatmapBackend/heatviz/clustergrammer2/clustergrammer_fun/make_clust_fun.py", line 26, in make_clust
+    inst_dm = calc_clust.cluster_row_and_col(net, dist_type=dist_type,
+  File "/Users/kevinulrich/Desktop/HeatmapTool/Backend/HeatmapBackend/heatviz/clustergrammer2/clustergrammer_fun/calc_clust.py", line 51, in cluster_row_and_col
+    node_info['clust'], node_info['Y'],  node_info['group'] = clust_and_group(net,
+  File "/Users/kevinulrich/Desktop/HeatmapTool/Backend/HeatmapBackend/heatviz/clustergrammer2/clustergrammer_fun/calc_clust.py", line 251, in clust_and_group
+    Y = hier.linkage(inst_dm, method=linkage_type)
+  File "/Users/kevinulrich/anaconda3/envs/heatmapBackend/lib/python3.8/site-packages/scipy/cluster/hierarchy.py", line 1065, in linkage
+    raise ValueError("The condensed distance matrix must contain only "
+ValueError: The condensed distance matrix must contain only finite values.
+
+ERROR 2025-05-07 19:07:21,483 log 47160 6328709120 Internal Server Error: /api/heatmapdata/process/
+ERROR 2025-05-07 19:07:21,484 basehttp 47160 6328709120 "POST /api/heatmapdata/process/ HTTP/1.1" 500 1708
+ERROR 2025-05-07 19:07:21,524 views 47160 6362361856 Error processing file: The condensed distance matrix must contain only finite values.
+Traceback (most recent call last):
+  File "/Users/kevinulrich/Desktop/HeatmapTool/Backend/HeatmapBackend/heatviz/views.py", line 78, in process_data_view
+    response_data = make_cluster(temp_file_path)
+  File "/Users/kevinulrich/Desktop/HeatmapTool/Backend/HeatmapBackend/heatviz/clustergrammer2/make_clustergrammer.py", line 59, in make_cluster
+    net.cluster(dist_type='cos', dendro=True,
+  File "/Users/kevinulrich/Desktop/HeatmapTool/Backend/HeatmapBackend/heatviz/clustergrammer2/clustergrammer_fun/__init__.py", line 104, in cluster
+    make_clust_fun.make_clust(self, dist_type=dist_type,
+  File "/Users/kevinulrich/Desktop/HeatmapTool/Backend/HeatmapBackend/heatviz/clustergrammer2/clustergrammer_fun/make_clust_fun.py", line 26, in make_clust
+    inst_dm = calc_clust.cluster_row_and_col(net, dist_type=dist_type,
+  File "/Users/kevinulrich/Desktop/HeatmapTool/Backend/HeatmapBackend/heatviz/clustergrammer2/clustergrammer_fun/calc_clust.py", line 51, in cluster_row_and_col
+    node_info['clust'], node_info['Y'],  node_info['group'] = clust_and_group(net,
+  File "/Users/kevinulrich/Desktop/HeatmapTool/Backend/HeatmapBackend/heatviz/clustergrammer2/clustergrammer_fun/calc_clust.py", line 251, in clust_and_group
+    Y = hier.linkage(inst_dm, method=linkage_type)
+  File "/Users/kevinulrich/anaconda3/envs/heatmapBackend/lib/python3.8/site-packages/scipy/cluster/hierarchy.py", line 1065, in linkage
+    raise ValueError("The condensed distance matrix must contain only "
+ValueError: The condensed distance matrix must contain only finite values.
+
+ERROR 2025-05-07 19:07:21,530 log 47160 6362361856 Internal Server Error: /api/heatmapdata/process/
+ERROR 2025-05-07 19:07:21,531 basehttp 47160 6362361856 "POST /api/heatmapdata/process/ HTTP/1.1" 500 1708
+ERROR 2025-05-07 19:07:21,610 views 47160 6345535488 Error processing file: The condensed distance matrix must contain only finite values.
+Traceback (most recent call last):
+  File "/Users/kevinulrich/Desktop/HeatmapTool/Backend/HeatmapBackend/heatviz/views.py", line 78, in process_data_view
+    response_data = make_cluster(temp_file_path)
+  File "/Users/kevinulrich/Desktop/HeatmapTool/Backend/HeatmapBackend/heatviz/clustergrammer2/make_clustergrammer.py", line 59, in make_cluster
+    net.cluster(dist_type='cos', dendro=True,
+  File "/Users/kevinulrich/Desktop/HeatmapTool/Backend/HeatmapBackend/heatviz/clustergrammer2/clustergrammer_fun/__init__.py", line 104, in cluster
+    make_clust_fun.make_clust(self, dist_type=dist_type,
+  File "/Users/kevinulrich/Desktop/HeatmapTool/Backend/HeatmapBackend/heatviz/clustergrammer2/clustergrammer_fun/make_clust_fun.py", line 26, in make_clust
+    inst_dm = calc_clust.cluster_row_and_col(net, dist_type=dist_type,
+  File "/Users/kevinulrich/Desktop/HeatmapTool/Backend/HeatmapBackend/heatviz/clustergrammer2/clustergrammer_fun/calc_clust.py", line 51, in cluster_row_and_col
+    node_info['clust'], node_info['Y'],  node_info['group'] = clust_and_group(net,
+  File "/Users/kevinulrich/Desktop/HeatmapTool/Backend/HeatmapBackend/heatviz/clustergrammer2/clustergrammer_fun/calc_clust.py", line 251, in clust_and_group
+    Y = hier.linkage(inst_dm, method=linkage_type)
+  File "/Users/kevinulrich/anaconda3/envs/heatmapBackend/lib/python3.8/site-packages/scipy/cluster/hierarchy.py", line 1065, in linkage
+    raise ValueError("The condensed distance matrix must contain only "
+ValueError: The condensed distance matrix must contain only finite values.
+
+ERROR 2025-05-07 19:07:21,617 log 47160 6345535488 Internal Server Error: /api/heatmapdata/process/
+ERROR 2025-05-07 19:07:21,617 basehttp 47160 6345535488 "POST /api/heatmapdata/process/ HTTP/1.1" 500 1708
+ERROR 2025-05-12 04:45:01,257 views 67106 6140981248 ❌ Error processing file: [Errno 2] No such file or directory: '/Users/kevinulrich/heatmap_uploads/ad679cbf-42b6-4959-b744-54bafa625aff.tsv'
+Traceback (most recent call last):
+  File "/Users/kevinulrich/Desktop/HeatmapTool/Backend/HeatmapBackend/heatviz/views.py", line 102, in process_data_view
+    with open(file_path, 'wb+') as destination:
+FileNotFoundError: [Errno 2] No such file or directory: '/Users/kevinulrich/heatmap_uploads/ad679cbf-42b6-4959-b744-54bafa625aff.tsv'
+
+ERROR 2025-05-12 04:45:01,258 views 67106 6157807616 ❌ Error processing file: [Errno 2] No such file or directory: '/Users/kevinulrich/heatmap_uploads/9687231b-a864-4d4f-af5a-084b15be9630.tsv'
+Traceback (most recent call last):
+  File "/Users/kevinulrich/Desktop/HeatmapTool/Backend/HeatmapBackend/heatviz/views.py", line 102, in process_data_view
+    with open(file_path, 'wb+') as destination:
+FileNotFoundError: [Errno 2] No such file or directory: '/Users/kevinulrich/heatmap_uploads/9687231b-a864-4d4f-af5a-084b15be9630.tsv'
+
+ERROR 2025-05-12 04:45:01,258 log 67106 6140981248 Internal Server Error: /api/heatmapdata/process/
+ERROR 2025-05-12 04:45:01,259 log 67106 6157807616 Internal Server Error: /api/heatmapdata/process/
+ERROR 2025-05-12 04:45:01,259 views 67106 6124154880 ❌ Error processing file: [Errno 2] No such file or directory: '/Users/kevinulrich/heatmap_uploads/0b84a5a4-546e-43da-ab3c-e6bbbe7ec5be.tsv'
+Traceback (most recent call last):
+  File "/Users/kevinulrich/Desktop/HeatmapTool/Backend/HeatmapBackend/heatviz/views.py", line 102, in process_data_view
+    with open(file_path, 'wb+') as destination:
+FileNotFoundError: [Errno 2] No such file or directory: '/Users/kevinulrich/heatmap_uploads/0b84a5a4-546e-43da-ab3c-e6bbbe7ec5be.tsv'
+
+ERROR 2025-05-12 04:45:01,259 log 67106 6124154880 Internal Server Error: /api/heatmapdata/process/
+ERROR 2025-05-12 04:45:01,259 basehttp 67106 6140981248 "POST /api/heatmapdata/process/ HTTP/1.1" 500 487
+ERROR 2025-05-12 04:45:01,259 basehttp 67106 6157807616 "POST /api/heatmapdata/process/ HTTP/1.1" 500 487
+ERROR 2025-05-12 04:45:01,260 basehttp 67106 6124154880 "POST /api/heatmapdata/process/ HTTP/1.1" 500 487
+ERROR 2025-05-13 21:26:10,979 log 77288 13170143232 Internal Server Error: /api/heatmapdata/command/
+ERROR 2025-05-13 21:26:10,981 basehttp 77288 13170143232 "POST /api/heatmapdata/command/ HTTP/1.1" 500 46
+ERROR 2025-05-13 21:28:27,755 log 77288 13170143232 Internal Server Error: /api/heatmapdata/command/
+ERROR 2025-05-13 21:28:27,759 basehttp 77288 13170143232 "POST /api/heatmapdata/command/ HTTP/1.1" 500 46
+ERROR 2025-05-13 21:28:59,582 log 77288 13170143232 Internal Server Error: /api/heatmapdata/command/
+ERROR 2025-05-13 21:28:59,585 basehttp 77288 13170143232 "POST /api/heatmapdata/command/ HTTP/1.1" 500 46
+ERROR 2025-05-13 21:31:10,784 log 77405 6136442880 Internal Server Error: /api/heatmapdata/command/
+ERROR 2025-05-13 21:31:10,792 basehttp 77405 6136442880 "POST /api/heatmapdata/command/ HTTP/1.1" 500 46
+ERROR 2025-05-13 21:32:00,186 log 77423 6141276160 Internal Server Error: /api/heatmapdata/command/
+ERROR 2025-05-13 21:32:00,187 basehttp 77423 6141276160 "POST /api/heatmapdata/command/ HTTP/1.1" 500 46
+ERROR 2025-05-13 21:33:33,535 log 77432 6392147968 Internal Server Error: /api/heatmapdata/command/
+ERROR 2025-05-13 21:33:33,537 basehttp 77432 6392147968 "POST /api/heatmapdata/command/ HTTP/1.1" 500 46
+ERROR 2025-05-13 21:37:18,699 log 77495 6383759360 Internal Server Error: /api/heatmapdata/command/
+ERROR 2025-05-13 21:37:18,701 basehttp 77495 6383759360 "POST /api/heatmapdata/command/ HTTP/1.1" 500 46
+ERROR 2025-05-13 21:38:22,102 log 77495 6383759360 Internal Server Error: /api/heatmapdata/command/
+ERROR 2025-05-13 21:38:22,105 basehttp 77495 6383759360 "POST /api/heatmapdata/command/ HTTP/1.1" 500 46
+ERROR 2025-05-13 21:45:01,731 log 77594 13170143232 Internal Server Error: /api/heatmapdata/command/
+ERROR 2025-05-13 21:45:01,736 basehttp 77594 13170143232 "POST /api/heatmapdata/command/ HTTP/1.1" 500 46
+ERROR 2025-05-13 21:48:34,429 log 77608 13103034368 Internal Server Error: /api/heatmapdata/command/
+ERROR 2025-05-13 21:48:34,431 basehttp 77608 13103034368 "POST /api/heatmapdata/command/ HTTP/1.1" 500 46
+ERROR 2025-05-13 21:48:34,475 log 77608 13071577088 Internal Server Error: /api/heatmapdata/command/
+ERROR 2025-05-13 21:48:34,476 basehttp 77608 13071577088 "POST /api/heatmapdata/command/ HTTP/1.1" 500 46
+ERROR 2025-05-13 21:50:01,969 log 77608 13071577088 Internal Server Error: /api/heatmapdata/command/
+ERROR 2025-05-13 21:50:01,976 basehttp 77608 13071577088 "POST /api/heatmapdata/command/ HTTP/1.1" 500 46
+ERROR 2025-05-13 22:03:18,912 log 77727 13036711936 Internal Server Error: /api/heatmapdata/command/
+ERROR 2025-05-13 22:03:18,916 basehttp 77727 13036711936 "POST /api/heatmapdata/command/ HTTP/1.1" 500 46
+ERROR 2025-05-13 22:03:55,215 log 77727 13036711936 Internal Server Error: /api/heatmapdata/command/
+ERROR 2025-05-13 22:03:55,222 basehttp 77727 13036711936 "POST /api/heatmapdata/command/ HTTP/1.1" 500 46
+ERROR 2025-05-13 22:04:15,533 log 77727 13036711936 Internal Server Error: /api/heatmapdata/command/
+ERROR 2025-05-13 22:04:15,535 basehttp 77727 13036711936 "POST /api/heatmapdata/command/ HTTP/1.1" 500 46
+ERROR 2025-05-14 14:16:21,128 log 78501 6302871552 Internal Server Error: /api/heatmapdata/command/
+ERROR 2025-05-14 14:16:21,131 basehttp 78501 6302871552 "POST /api/heatmapdata/command/ HTTP/1.1" 500 46
+ERROR 2025-05-14 20:18:22,838 log 46734 13304360960 Internal Server Error: /api/heatmapdata/command/
+ERROR 2025-05-14 20:18:22,839 basehttp 46734 13304360960 "POST /api/heatmapdata/command/ HTTP/1.1" 500 1479
+ERROR 2025-05-14 20:19:45,124 log 46788 13170929664 Internal Server Error: /api/heatmapdata/command/
+ERROR 2025-05-14 20:19:45,125 basehttp 46788 13170929664 "POST /api/heatmapdata/command/ HTTP/1.1" 500 1479
+ERROR 2025-05-14 20:38:01,528 log 46902 13101199360 Internal Server Error: /api/heatmapdata/command/
+ERROR 2025-05-14 20:38:01,529 basehttp 46902 13101199360 "POST /api/heatmapdata/command/ HTTP/1.1" 500 2299
+ERROR 2025-05-14 20:47:50,379 log 48745 13170143232 Internal Server Error: /api/heatmapdata/command/
+ERROR 2025-05-14 20:47:50,379 basehttp 48745 13170143232 "POST /api/heatmapdata/command/ HTTP/1.1" 500 2299
+ERROR 2025-05-14 21:14:28,114 log 48919 13061353472 Internal Server Error: /api/heatmapdata/command/
+ERROR 2025-05-14 21:14:28,114 basehttp 48919 13061353472 "POST /api/heatmapdata/command/ HTTP/1.1" 500 2299
+ERROR 2025-05-14 21:19:40,661 log 48953 12928970752 Internal Server Error: /api/heatmapdata/command/
+ERROR 2025-05-14 21:19:40,662 basehttp 48953 12928970752 "POST /api/heatmapdata/command/ HTTP/1.1" 500 1479
+ERROR 2025-05-14 21:21:20,878 log 48963 13170143232 Internal Server Error: /api/heatmapdata/command/
+ERROR 2025-05-14 21:21:20,879 basehttp 48963 13170143232 "POST /api/heatmapdata/command/ HTTP/1.1" 500 1479
+ERROR 2025-05-14 21:26:46,769 log 49007 6168014848 Internal Server Error: /api/heatmapdata/command/
+ERROR 2025-05-14 21:26:46,770 basehttp 49007 6168014848 "POST /api/heatmapdata/command/ HTTP/1.1" 500 1479
+ERROR 2025-05-14 21:28:20,748 log 49023 12933165056 Internal Server Error: /api/heatmapdata/command/
+ERROR 2025-05-14 21:28:20,748 basehttp 49023 12933165056 "POST /api/heatmapdata/command/ HTTP/1.1" 500 1479
+ERROR 2025-05-14 21:30:57,166 log 49041 13170143232 Internal Server Error: /api/heatmapdata/command/
+ERROR 2025-05-14 21:30:57,166 basehttp 49041 13170143232 "POST /api/heatmapdata/command/ HTTP/1.1" 500 1473
+ERROR 2025-05-14 22:53:23,393 log 49435 13238562816 Internal Server Error: /api/heatmapdata/command/
+ERROR 2025-05-14 22:53:23,395 basehttp 49435 13238562816 "POST /api/heatmapdata/command/ HTTP/1.1" 500 1057
+ERROR 2025-05-14 23:04:02,022 log 49617 6209122304 Internal Server Error: /api/heatmapdata/command/
+ERROR 2025-05-14 23:04:02,023 basehttp 49617 6209122304 "POST /api/heatmapdata/command/ HTTP/1.1" 500 1057
+ERROR 2025-05-14 23:04:48,955 log 49617 6225948672 Internal Server Error: /api/heatmapdata/command/
+ERROR 2025-05-14 23:04:48,957 basehttp 49617 6225948672 "POST /api/heatmapdata/command/ HTTP/1.1" 500 1057
+ERROR 2025-05-14 23:29:11,228 log 49617 6209122304 Internal Server Error: /api/heatmapdata/command/
+ERROR 2025-05-14 23:29:11,230 basehttp 49617 6209122304 "POST /api/heatmapdata/command/ HTTP/1.1" 500 326
+ERROR 2025-05-15 02:20:44,714 log 51312 6146732032 Internal Server Error: /api/heatmapdata/command/
+ERROR 2025-05-15 02:20:44,715 basehttp 51312 6146732032 "POST /api/heatmapdata/command/ HTTP/1.1" 500 470
+ERROR 2025-05-15 02:22:58,233 log 51312 6146732032 Internal Server Error: /api/heatmapdata/command/
+ERROR 2025-05-15 02:22:58,234 basehttp 51312 6146732032 "POST /api/heatmapdata/command/ HTTP/1.1" 500 470
+ERROR 2025-05-15 02:43:43,586 log 51534 13164638208 Internal Server Error: /api/heatmapdata/command/
+ERROR 2025-05-15 02:43:43,589 basehttp 51534 13164638208 "POST /api/heatmapdata/command/ HTTP/1.1" 500 1242
+ERROR 2025-05-15 17:36:44,889 log 54155 6139342848 Internal Server Error: /api/heatmapdata/command/
+ERROR 2025-05-15 17:36:44,891 basehttp 54155 6139342848 "POST /api/heatmapdata/command/ HTTP/1.1" 500 1057
+ERROR 2025-05-20 02:07:09,122 log 65453 13067644928 Internal Server Error: /api/heatmapdata/command/
+ERROR 2025-05-20 02:07:09,123 basehttp 65453 13067644928 "POST /api/heatmapdata/command/ HTTP/1.1" 500 288
+ERROR 2025-05-20 04:33:11,052 log 68225 13111422976 Internal Server Error: /api/heatmapdata/command/
+Traceback (most recent call last):
+  File "/Users/kevinulrich/anaconda3/envs/heatmapBackend/lib/python3.8/site-packages/django/core/handlers/exception.py", line 47, in inner
+    response = get_response(request)
+  File "/Users/kevinulrich/anaconda3/envs/heatmapBackend/lib/python3.8/site-packages/django/core/handlers/base.py", line 204, in _get_response
+    response = response.render()
+  File "/Users/kevinulrich/anaconda3/envs/heatmapBackend/lib/python3.8/site-packages/django/template/response.py", line 105, in render
+    self.content = self.rendered_content
+  File "/Users/kevinulrich/anaconda3/envs/heatmapBackend/lib/python3.8/site-packages/rest_framework/response.py", line 70, in rendered_content
+    ret = renderer.render(self.data, accepted_media_type, context)
+  File "/Users/kevinulrich/anaconda3/envs/heatmapBackend/lib/python3.8/site-packages/rest_framework/renderers.py", line 99, in render
+    ret = json.dumps(
+  File "/Users/kevinulrich/anaconda3/envs/heatmapBackend/lib/python3.8/site-packages/rest_framework/utils/json.py", line 25, in dumps
+    return json.dumps(*args, **kwargs)
+  File "/Users/kevinulrich/anaconda3/envs/heatmapBackend/lib/python3.8/json/__init__.py", line 234, in dumps
+    return cls(
+  File "/Users/kevinulrich/anaconda3/envs/heatmapBackend/lib/python3.8/json/encoder.py", line 199, in encode
+    chunks = self.iterencode(o, _one_shot=True)
+  File "/Users/kevinulrich/anaconda3/envs/heatmapBackend/lib/python3.8/json/encoder.py", line 257, in iterencode
+    return _iterencode(o, 0)
+ValueError: Out of range float values are not JSON compliant
+ERROR 2025-05-20 04:33:11,054 basehttp 68225 13111422976 "POST /api/heatmapdata/command/ HTTP/1.1" 500 16633
+ERROR 2025-05-20 04:48:59,412 log 68438 6166720512 Internal Server Error: /api/heatmapdata/command/
+Traceback (most recent call last):
+  File "/Users/kevinulrich/anaconda3/envs/heatmapBackend/lib/python3.8/site-packages/django/core/handlers/exception.py", line 47, in inner
+    response = get_response(request)
+  File "/Users/kevinulrich/anaconda3/envs/heatmapBackend/lib/python3.8/site-packages/django/core/handlers/base.py", line 204, in _get_response
+    response = response.render()
+  File "/Users/kevinulrich/anaconda3/envs/heatmapBackend/lib/python3.8/site-packages/django/template/response.py", line 105, in render
+    self.content = self.rendered_content
+  File "/Users/kevinulrich/anaconda3/envs/heatmapBackend/lib/python3.8/site-packages/rest_framework/response.py", line 70, in rendered_content
+    ret = renderer.render(self.data, accepted_media_type, context)
+  File "/Users/kevinulrich/anaconda3/envs/heatmapBackend/lib/python3.8/site-packages/rest_framework/renderers.py", line 99, in render
+    ret = json.dumps(
+  File "/Users/kevinulrich/anaconda3/envs/heatmapBackend/lib/python3.8/site-packages/rest_framework/utils/json.py", line 25, in dumps
+    return json.dumps(*args, **kwargs)
+  File "/Users/kevinulrich/anaconda3/envs/heatmapBackend/lib/python3.8/json/__init__.py", line 234, in dumps
+    return cls(
+  File "/Users/kevinulrich/anaconda3/envs/heatmapBackend/lib/python3.8/json/encoder.py", line 199, in encode
+    chunks = self.iterencode(o, _one_shot=True)
+  File "/Users/kevinulrich/anaconda3/envs/heatmapBackend/lib/python3.8/json/encoder.py", line 257, in iterencode
+    return _iterencode(o, 0)
+ValueError: Out of range float values are not JSON compliant
+ERROR 2025-05-20 04:48:59,413 basehttp 68438 6166720512 "POST /api/heatmapdata/command/ HTTP/1.1" 500 16633
+ERROR 2025-05-20 04:49:57,199 log 68438 6166720512 Internal Server Error: /api/heatmapdata/command/
+Traceback (most recent call last):
+  File "/Users/kevinulrich/anaconda3/envs/heatmapBackend/lib/python3.8/site-packages/django/core/handlers/exception.py", line 47, in inner
+    response = get_response(request)
+  File "/Users/kevinulrich/anaconda3/envs/heatmapBackend/lib/python3.8/site-packages/django/core/handlers/base.py", line 204, in _get_response
+    response = response.render()
+  File "/Users/kevinulrich/anaconda3/envs/heatmapBackend/lib/python3.8/site-packages/django/template/response.py", line 105, in render
+    self.content = self.rendered_content
+  File "/Users/kevinulrich/anaconda3/envs/heatmapBackend/lib/python3.8/site-packages/rest_framework/response.py", line 70, in rendered_content
+    ret = renderer.render(self.data, accepted_media_type, context)
+  File "/Users/kevinulrich/anaconda3/envs/heatmapBackend/lib/python3.8/site-packages/rest_framework/renderers.py", line 99, in render
+    ret = json.dumps(
+  File "/Users/kevinulrich/anaconda3/envs/heatmapBackend/lib/python3.8/site-packages/rest_framework/utils/json.py", line 25, in dumps
+    return json.dumps(*args, **kwargs)
+  File "/Users/kevinulrich/anaconda3/envs/heatmapBackend/lib/python3.8/json/__init__.py", line 234, in dumps
+    return cls(
+  File "/Users/kevinulrich/anaconda3/envs/heatmapBackend/lib/python3.8/json/encoder.py", line 199, in encode
+    chunks = self.iterencode(o, _one_shot=True)
+  File "/Users/kevinulrich/anaconda3/envs/heatmapBackend/lib/python3.8/json/encoder.py", line 257, in iterencode
+    return _iterencode(o, 0)
+ValueError: Out of range float values are not JSON compliant
+ERROR 2025-05-20 04:49:57,202 basehttp 68438 6166720512 "POST /api/heatmapdata/command/ HTTP/1.1" 500 16633
+ERROR 2025-05-20 04:50:22,542 log 68438 6166720512 Internal Server Error: /api/heatmapdata/command/
+Traceback (most recent call last):
+  File "/Users/kevinulrich/anaconda3/envs/heatmapBackend/lib/python3.8/site-packages/django/core/handlers/exception.py", line 47, in inner
+    response = get_response(request)
+  File "/Users/kevinulrich/anaconda3/envs/heatmapBackend/lib/python3.8/site-packages/django/core/handlers/base.py", line 204, in _get_response
+    response = response.render()
+  File "/Users/kevinulrich/anaconda3/envs/heatmapBackend/lib/python3.8/site-packages/django/template/response.py", line 105, in render
+    self.content = self.rendered_content
+  File "/Users/kevinulrich/anaconda3/envs/heatmapBackend/lib/python3.8/site-packages/rest_framework/response.py", line 70, in rendered_content
+    ret = renderer.render(self.data, accepted_media_type, context)
+  File "/Users/kevinulrich/anaconda3/envs/heatmapBackend/lib/python3.8/site-packages/rest_framework/renderers.py", line 99, in render
+    ret = json.dumps(
+  File "/Users/kevinulrich/anaconda3/envs/heatmapBackend/lib/python3.8/site-packages/rest_framework/utils/json.py", line 25, in dumps
+    return json.dumps(*args, **kwargs)
+  File "/Users/kevinulrich/anaconda3/envs/heatmapBackend/lib/python3.8/json/__init__.py", line 234, in dumps
+    return cls(
+  File "/Users/kevinulrich/anaconda3/envs/heatmapBackend/lib/python3.8/json/encoder.py", line 199, in encode
+    chunks = self.iterencode(o, _one_shot=True)
+  File "/Users/kevinulrich/anaconda3/envs/heatmapBackend/lib/python3.8/json/encoder.py", line 257, in iterencode
+    return _iterencode(o, 0)
+ValueError: Out of range float values are not JSON compliant
+ERROR 2025-05-20 04:50:22,543 basehttp 68438 6166720512 "POST /api/heatmapdata/command/ HTTP/1.1" 500 16633
+ERROR 2025-05-20 04:52:38,070 log 68522 13035925504 Internal Server Error: /api/heatmapdata/command/
+Traceback (most recent call last):
+  File "/Users/kevinulrich/anaconda3/envs/heatmapBackend/lib/python3.8/site-packages/django/core/handlers/exception.py", line 47, in inner
+    response = get_response(request)
+  File "/Users/kevinulrich/anaconda3/envs/heatmapBackend/lib/python3.8/site-packages/django/core/handlers/base.py", line 204, in _get_response
+    response = response.render()
+  File "/Users/kevinulrich/anaconda3/envs/heatmapBackend/lib/python3.8/site-packages/django/template/response.py", line 105, in render
+    self.content = self.rendered_content
+  File "/Users/kevinulrich/anaconda3/envs/heatmapBackend/lib/python3.8/site-packages/rest_framework/response.py", line 70, in rendered_content
+    ret = renderer.render(self.data, accepted_media_type, context)
+  File "/Users/kevinulrich/anaconda3/envs/heatmapBackend/lib/python3.8/site-packages/rest_framework/renderers.py", line 99, in render
+    ret = json.dumps(
+  File "/Users/kevinulrich/anaconda3/envs/heatmapBackend/lib/python3.8/site-packages/rest_framework/utils/json.py", line 25, in dumps
+    return json.dumps(*args, **kwargs)
+  File "/Users/kevinulrich/anaconda3/envs/heatmapBackend/lib/python3.8/json/__init__.py", line 234, in dumps
+    return cls(
+  File "/Users/kevinulrich/anaconda3/envs/heatmapBackend/lib/python3.8/json/encoder.py", line 199, in encode
+    chunks = self.iterencode(o, _one_shot=True)
+  File "/Users/kevinulrich/anaconda3/envs/heatmapBackend/lib/python3.8/json/encoder.py", line 257, in iterencode
+    return _iterencode(o, 0)
+ValueError: Out of range float values are not JSON compliant
+ERROR 2025-05-20 04:52:38,071 basehttp 68522 13035925504 "POST /api/heatmapdata/command/ HTTP/1.1" 500 16633
+ERROR 2025-05-20 05:00:50,514 log 68676 13035925504 Internal Server Error: /api/heatmapdata/command/
+Traceback (most recent call last):
+  File "/Users/kevinulrich/anaconda3/envs/heatmapBackend/lib/python3.8/site-packages/django/core/handlers/exception.py", line 47, in inner
+    response = get_response(request)
+  File "/Users/kevinulrich/anaconda3/envs/heatmapBackend/lib/python3.8/site-packages/django/core/handlers/base.py", line 204, in _get_response
+    response = response.render()
+  File "/Users/kevinulrich/anaconda3/envs/heatmapBackend/lib/python3.8/site-packages/django/template/response.py", line 105, in render
+    self.content = self.rendered_content
+  File "/Users/kevinulrich/anaconda3/envs/heatmapBackend/lib/python3.8/site-packages/rest_framework/response.py", line 70, in rendered_content
+    ret = renderer.render(self.data, accepted_media_type, context)
+  File "/Users/kevinulrich/anaconda3/envs/heatmapBackend/lib/python3.8/site-packages/rest_framework/renderers.py", line 99, in render
+    ret = json.dumps(
+  File "/Users/kevinulrich/anaconda3/envs/heatmapBackend/lib/python3.8/site-packages/rest_framework/utils/json.py", line 25, in dumps
+    return json.dumps(*args, **kwargs)
+  File "/Users/kevinulrich/anaconda3/envs/heatmapBackend/lib/python3.8/json/__init__.py", line 234, in dumps
+    return cls(
+  File "/Users/kevinulrich/anaconda3/envs/heatmapBackend/lib/python3.8/json/encoder.py", line 199, in encode
+    chunks = self.iterencode(o, _one_shot=True)
+  File "/Users/kevinulrich/anaconda3/envs/heatmapBackend/lib/python3.8/json/encoder.py", line 257, in iterencode
+    return _iterencode(o, 0)
+ValueError: Out of range float values are not JSON compliant
+ERROR 2025-05-20 05:00:50,516 basehttp 68676 13035925504 "POST /api/heatmapdata/command/ HTTP/1.1" 500 16633
+ERROR 2025-05-20 05:21:01,405 views 68782 13195309056 ❌ Error processing file: can only concatenate str (not "float") to str
+Traceback (most recent call last):
+  File "/Users/kevinulrich/Desktop/HeatmapTool/Backend/HeatmapBackend/heatviz/views.py", line 129, in process_data_view
+    response_data = make_cluster(file_path)
+  File "/Users/kevinulrich/Desktop/HeatmapTool/Backend/HeatmapBackend/heatviz/clustergrammer2/make_clustergrammer.py", line 75, in make_cluster
+    net.normalize(norm_type='zscore', axis='row')
+  File "/Users/kevinulrich/Desktop/HeatmapTool/Backend/HeatmapBackend/heatviz/clustergrammer2/clustergrammer_fun/__init__.py", line 484, in normalize
+    normalize_fun.run_norm(self, df, norm_type, axis, z_clip)
+  File "/Users/kevinulrich/Desktop/HeatmapTool/Backend/HeatmapBackend/heatviz/clustergrammer2/clustergrammer_fun/normalize_fun.py", line 15, in run_norm
+    df, ser_mean, ser_std = zscore_df(df, axis, z_clip=z_clip)
+  File "/Users/kevinulrich/Desktop/HeatmapTool/Backend/HeatmapBackend/heatviz/clustergrammer2/clustergrammer_fun/normalize_fun.py", line 139, in zscore_df
+    ser_mean = df.mean()
+  File "/Users/kevinulrich/anaconda3/envs/heatmapBackend/lib/python3.8/site-packages/pandas/core/generic.py", line 11556, in mean
+    return NDFrame.mean(self, axis, skipna, numeric_only, **kwargs)
+  File "/Users/kevinulrich/anaconda3/envs/heatmapBackend/lib/python3.8/site-packages/pandas/core/generic.py", line 11201, in mean
+    return self._stat_function(
+  File "/Users/kevinulrich/anaconda3/envs/heatmapBackend/lib/python3.8/site-packages/pandas/core/generic.py", line 11158, in _stat_function
+    return self._reduce(
+  File "/Users/kevinulrich/anaconda3/envs/heatmapBackend/lib/python3.8/site-packages/pandas/core/frame.py", line 10519, in _reduce
+    res = df._mgr.reduce(blk_func)
+  File "/Users/kevinulrich/anaconda3/envs/heatmapBackend/lib/python3.8/site-packages/pandas/core/internals/managers.py", line 1534, in reduce
+    nbs = blk.reduce(func)
+  File "/Users/kevinulrich/anaconda3/envs/heatmapBackend/lib/python3.8/site-packages/pandas/core/internals/blocks.py", line 339, in reduce
+    result = func(self.values)
+  File "/Users/kevinulrich/anaconda3/envs/heatmapBackend/lib/python3.8/site-packages/pandas/core/frame.py", line 10482, in blk_func
+    return op(values, axis=axis, skipna=skipna, **kwds)
+  File "/Users/kevinulrich/anaconda3/envs/heatmapBackend/lib/python3.8/site-packages/pandas/core/nanops.py", line 96, in _f
+    return f(*args, **kwargs)
+  File "/Users/kevinulrich/anaconda3/envs/heatmapBackend/lib/python3.8/site-packages/pandas/core/nanops.py", line 158, in f
+    result = alt(values, axis=axis, skipna=skipna, **kwds)
+  File "/Users/kevinulrich/anaconda3/envs/heatmapBackend/lib/python3.8/site-packages/pandas/core/nanops.py", line 421, in new_func
+    result = func(values, axis=axis, skipna=skipna, mask=mask, **kwargs)
+  File "/Users/kevinulrich/anaconda3/envs/heatmapBackend/lib/python3.8/site-packages/pandas/core/nanops.py", line 727, in nanmean
+    the_sum = _ensure_numeric(values.sum(axis, dtype=dtype_sum))
+  File "/Users/kevinulrich/anaconda3/envs/heatmapBackend/lib/python3.8/site-packages/numpy/core/_methods.py", line 49, in _sum
+    return umr_sum(a, axis, dtype, out, keepdims, initial, where)
+TypeError: can only concatenate str (not "float") to str
+
+ERROR 2025-05-20 05:21:01,406 log 68782 13195309056 Internal Server Error: /api/heatmapdata/process/
+ERROR 2025-05-20 05:21:01,406 basehttp 68782 13195309056 "POST /api/heatmapdata/process/ HTTP/1.1" 500 3354
+ERROR 2025-05-22 05:23:54,416 views 22134 6325039104 ❌ Error processing file: can only concatenate str (not "float") to str
+Traceback (most recent call last):
+  File "/Users/kevinulrich/Desktop/HeatmapTool/Backend/HeatmapBackend/heatviz/views.py", line 129, in process_data_view
+    response_data = make_cluster(file_path)
+  File "/Users/kevinulrich/Desktop/HeatmapTool/Backend/HeatmapBackend/heatviz/clustergrammer2/make_clustergrammer.py", line 104, in make_cluster
+    net.normalize(norm_type='zscore', axis='row')
+  File "/Users/kevinulrich/Desktop/HeatmapTool/Backend/HeatmapBackend/heatviz/clustergrammer2/clustergrammer_fun/__init__.py", line 484, in normalize
+    normalize_fun.run_norm(self, df, norm_type, axis, z_clip)
+  File "/Users/kevinulrich/Desktop/HeatmapTool/Backend/HeatmapBackend/heatviz/clustergrammer2/clustergrammer_fun/normalize_fun.py", line 15, in run_norm
+    df, ser_mean, ser_std = zscore_df(df, axis, z_clip=z_clip)
+  File "/Users/kevinulrich/Desktop/HeatmapTool/Backend/HeatmapBackend/heatviz/clustergrammer2/clustergrammer_fun/normalize_fun.py", line 139, in zscore_df
+    ser_mean = df.mean()
+  File "/Users/kevinulrich/anaconda3/envs/heatmapBackend/lib/python3.8/site-packages/pandas/core/generic.py", line 11556, in mean
+    return NDFrame.mean(self, axis, skipna, numeric_only, **kwargs)
+  File "/Users/kevinulrich/anaconda3/envs/heatmapBackend/lib/python3.8/site-packages/pandas/core/generic.py", line 11201, in mean
+    return self._stat_function(
+  File "/Users/kevinulrich/anaconda3/envs/heatmapBackend/lib/python3.8/site-packages/pandas/core/generic.py", line 11158, in _stat_function
+    return self._reduce(
+  File "/Users/kevinulrich/anaconda3/envs/heatmapBackend/lib/python3.8/site-packages/pandas/core/frame.py", line 10519, in _reduce
+    res = df._mgr.reduce(blk_func)
+  File "/Users/kevinulrich/anaconda3/envs/heatmapBackend/lib/python3.8/site-packages/pandas/core/internals/managers.py", line 1534, in reduce
+    nbs = blk.reduce(func)
+  File "/Users/kevinulrich/anaconda3/envs/heatmapBackend/lib/python3.8/site-packages/pandas/core/internals/blocks.py", line 339, in reduce
+    result = func(self.values)
+  File "/Users/kevinulrich/anaconda3/envs/heatmapBackend/lib/python3.8/site-packages/pandas/core/frame.py", line 10482, in blk_func
+    return op(values, axis=axis, skipna=skipna, **kwds)
+  File "/Users/kevinulrich/anaconda3/envs/heatmapBackend/lib/python3.8/site-packages/pandas/core/nanops.py", line 96, in _f
+    return f(*args, **kwargs)
+  File "/Users/kevinulrich/anaconda3/envs/heatmapBackend/lib/python3.8/site-packages/pandas/core/nanops.py", line 158, in f
+    result = alt(values, axis=axis, skipna=skipna, **kwds)
+  File "/Users/kevinulrich/anaconda3/envs/heatmapBackend/lib/python3.8/site-packages/pandas/core/nanops.py", line 421, in new_func
+    result = func(values, axis=axis, skipna=skipna, mask=mask, **kwargs)
+  File "/Users/kevinulrich/anaconda3/envs/heatmapBackend/lib/python3.8/site-packages/pandas/core/nanops.py", line 727, in nanmean
+    the_sum = _ensure_numeric(values.sum(axis, dtype=dtype_sum))
+  File "/Users/kevinulrich/anaconda3/envs/heatmapBackend/lib/python3.8/site-packages/numpy/core/_methods.py", line 49, in _sum
+    return umr_sum(a, axis, dtype, out, keepdims, initial, where)
+TypeError: can only concatenate str (not "float") to str
+
+ERROR 2025-05-22 05:23:54,450 log 22134 6325039104 Internal Server Error: /api/heatmapdata/process/
+ERROR 2025-05-22 05:23:54,450 basehttp 22134 6325039104 "POST /api/heatmapdata/process/ HTTP/1.1" 500 3355
+ERROR 2025-05-30 13:36:55,179 log 43158 6201405440 Internal Server Error: /api/heatmapdata/command/
+ERROR 2025-05-30 13:36:55,180 basehttp 43158 6201405440 "POST /api/heatmapdata/command/ HTTP/1.1" 500 727
+ERROR 2025-05-30 14:15:15,449 log 43840 13168308224 Internal Server Error: /api/heatmapdata/command/
+ERROR 2025-05-30 14:15:15,455 basehttp 43840 13168308224 "POST /api/heatmapdata/command/ HTTP/1.1" 500 727
+ERROR 2025-05-30 14:17:26,113 log 43840 13168308224 Internal Server Error: /api/heatmapdata/command/
+ERROR 2025-05-30 14:17:26,116 basehttp 43840 13168308224 "POST /api/heatmapdata/command/ HTTP/1.1" 500 727
+ERROR 2025-05-30 14:18:53,688 log 43971 6144110592 Internal Server Error: /api/heatmapdata/command/
+ERROR 2025-05-30 14:18:53,688 basehttp 43971 6144110592 "POST /api/heatmapdata/command/ HTTP/1.1" 500 727
+ERROR 2025-06-04 00:57:02,714 views 61365 6304165888 ❌ Error processing file: the JSON object must be str, bytes or bytearray, not dict
+Traceback (most recent call last):
+  File "/Users/kevinulrich/Desktop/HeatmapTool/Backend/HeatmapBackend/heatviz/views.py", line 89, in process_data_view
+    "heatmap_data": json.loads(response_data)
+  File "/Users/kevinulrich/anaconda3/envs/Heatmapbackend/lib/python3.8/json/__init__.py", line 341, in loads
+    raise TypeError(f'the JSON object must be str, bytes or bytearray, '
+TypeError: the JSON object must be str, bytes or bytearray, not dict
+
+ERROR 2025-06-04 00:57:02,714 log 61365 6304165888 Internal Server Error: /api/heatmapdata/process/
+ERROR 2025-06-04 00:57:02,714 basehttp 61365 6304165888 "POST /api/heatmapdata/process/ HTTP/1.1" 500 550
+ERROR 2025-06-10 04:17:23,044 log 37038 6274707456 Internal Server Error: /api/heatmapdata/enrich/
+Traceback (most recent call last):
+  File "/Users/kevinulrich/anaconda3/envs/Heatmapbackend/lib/python3.8/site-packages/django/core/handlers/exception.py", line 47, in inner
+    response = get_response(request)
+  File "/Users/kevinulrich/anaconda3/envs/Heatmapbackend/lib/python3.8/site-packages/django/core/handlers/base.py", line 181, in _get_response
+    response = wrapped_callback(request, *callback_args, **callback_kwargs)
+  File "/Users/kevinulrich/anaconda3/envs/Heatmapbackend/lib/python3.8/site-packages/django/views/decorators/csrf.py", line 54, in wrapped_view
+    return view_func(*args, **kwargs)
+  File "/Users/kevinulrich/anaconda3/envs/Heatmapbackend/lib/python3.8/site-packages/django/views/generic/base.py", line 70, in view
+    return self.dispatch(request, *args, **kwargs)
+  File "/Users/kevinulrich/anaconda3/envs/Heatmapbackend/lib/python3.8/site-packages/rest_framework/views.py", line 511, in dispatch
+    self.response = self.finalize_response(request, response, *args, **kwargs)
+  File "/Users/kevinulrich/anaconda3/envs/Heatmapbackend/lib/python3.8/site-packages/rest_framework/views.py", line 423, in finalize_response
+    assert isinstance(response, HttpResponseBase), (
+AssertionError: Expected a `Response`, `HttpResponse` or `HttpStreamingResponse` to be returned from the view, but received a `<class 'coroutine'>`
+ERROR 2025-06-10 04:17:23,046 basehttp 37038 6274707456 "POST /api/heatmapdata/enrich/ HTTP/1.1" 500 16515
+ERROR 2025-06-11 16:10:34,868 log 48924 13250621440 Internal Server Error: /api/heatmapdata/command/
+Traceback (most recent call last):
+  File "/Users/kevinulrich/anaconda3/envs/Heatmapbackend/lib/python3.8/site-packages/django/core/handlers/exception.py", line 47, in inner
+    response = get_response(request)
+  File "/Users/kevinulrich/anaconda3/envs/Heatmapbackend/lib/python3.8/site-packages/django/core/handlers/base.py", line 204, in _get_response
+    response = response.render()
+  File "/Users/kevinulrich/anaconda3/envs/Heatmapbackend/lib/python3.8/site-packages/django/template/response.py", line 105, in render
+    self.content = self.rendered_content
+  File "/Users/kevinulrich/anaconda3/envs/Heatmapbackend/lib/python3.8/site-packages/rest_framework/response.py", line 70, in rendered_content
+    ret = renderer.render(self.data, accepted_media_type, context)
+  File "/Users/kevinulrich/anaconda3/envs/Heatmapbackend/lib/python3.8/site-packages/rest_framework/renderers.py", line 99, in render
+    ret = json.dumps(
+  File "/Users/kevinulrich/anaconda3/envs/Heatmapbackend/lib/python3.8/site-packages/rest_framework/utils/json.py", line 25, in dumps
+    return json.dumps(*args, **kwargs)
+  File "/Users/kevinulrich/anaconda3/envs/Heatmapbackend/lib/python3.8/json/__init__.py", line 234, in dumps
+    return cls(
+  File "/Users/kevinulrich/anaconda3/envs/Heatmapbackend/lib/python3.8/json/encoder.py", line 199, in encode
+    chunks = self.iterencode(o, _one_shot=True)
+  File "/Users/kevinulrich/anaconda3/envs/Heatmapbackend/lib/python3.8/json/encoder.py", line 257, in iterencode
+    return _iterencode(o, 0)
+ValueError: Out of range float values are not JSON compliant
+ERROR 2025-06-11 16:10:34,870 basehttp 48924 13250621440 "POST /api/heatmapdata/command/ HTTP/1.1" 500 16668
+ERROR 2025-06-14 17:42:03,335 views 56340 12981661696 ❌ Error processing file: name 'get_available_strategies' is not defined
+Traceback (most recent call last):
+  File "/Users/kevinulrich/Desktop/HeatmapTool/Backend/HeatmapBackend/heatviz/views.py", line 183, in process_data_view
+    "available_strategies": get_available_strategies()
+NameError: name 'get_available_strategies' is not defined
+
+ERROR 2025-06-14 17:42:03,336 log 56340 12981661696 Internal Server Error: /api/heatmapdata/process/
+ERROR 2025-06-14 17:42:03,336 basehttp 56340 12981661696 "POST /api/heatmapdata/process/ HTTP/1.1" 500 352
+ERROR 2025-06-14 17:43:33,994 views 56396 13304360960 ❌ Error processing file: Object of type bool_ is not JSON serializable
+Traceback (most recent call last):
+  File "/Users/kevinulrich/Desktop/HeatmapTool/Backend/HeatmapBackend/heatviz/views.py", line 179, in process_data_view
+    return JsonResponse({
+  File "/Users/kevinulrich/anaconda3/envs/heatmapBackend/lib/python3.8/site-packages/django/http/response.py", line 605, in __init__
+    data = json.dumps(data, cls=encoder, **json_dumps_params)
+  File "/Users/kevinulrich/anaconda3/envs/heatmapBackend/lib/python3.8/json/__init__.py", line 234, in dumps
+    return cls(
+  File "/Users/kevinulrich/anaconda3/envs/heatmapBackend/lib/python3.8/json/encoder.py", line 199, in encode
+    chunks = self.iterencode(o, _one_shot=True)
+  File "/Users/kevinulrich/anaconda3/envs/heatmapBackend/lib/python3.8/json/encoder.py", line 257, in iterencode
+    return _iterencode(o, 0)
+  File "/Users/kevinulrich/anaconda3/envs/heatmapBackend/lib/python3.8/site-packages/django/core/serializers/json.py", line 105, in default
+    return super().default(o)
+  File "/Users/kevinulrich/anaconda3/envs/heatmapBackend/lib/python3.8/json/encoder.py", line 179, in default
+    raise TypeError(f'Object of type {o.__class__.__name__} '
+TypeError: Object of type bool_ is not JSON serializable
+
+ERROR 2025-06-14 17:43:33,995 log 56396 13304360960 Internal Server Error: /api/heatmapdata/process/
+ERROR 2025-06-14 17:43:33,995 basehttp 56396 13304360960 "POST /api/heatmapdata/process/ HTTP/1.1" 500 1304
+ERROR 2025-06-14 21:00:57,386 views 64430 6167982080 ❌ Error processing file: 'str' object has no attribute 'read'
+Traceback (most recent call last):
+  File "/Users/kevinulrich/Desktop/HeatmapTool/Backend/HeatmapBackend/heatviz/views.py", line 192, in process_data_view
+    response = json.load(response_data)
+  File "/Users/kevinulrich/anaconda3/envs/heatmapBackend/lib/python3.8/json/__init__.py", line 293, in load
+    return loads(fp.read(),
+AttributeError: 'str' object has no attribute 'read'
+
+ERROR 2025-06-14 21:00:57,387 log 64430 6167982080 Internal Server Error: /api/heatmapdata/process/
+ERROR 2025-06-14 21:00:57,388 basehttp 64430 6167982080 "POST /api/heatmapdata/process/ HTTP/1.1" 500 460
+ERROR 2025-06-16 03:03:54,692 views 76394 6299758592 ❌ Error processing with strategy: the JSON object must be str, bytes or bytearray, not dict
+Traceback (most recent call last):
+  File "/Users/kevinulrich/Desktop/HeatmapTool/Backend/HeatmapBackend/heatviz/views.py", line 248, in handle_strategy_processing
+    response = json.loads(response_data)
+  File "/Users/kevinulrich/anaconda3/envs/heatmapBackend/lib/python3.8/json/__init__.py", line 341, in loads
+    raise TypeError(f'the JSON object must be str, bytes or bytearray, '
+TypeError: the JSON object must be str, bytes or bytearray, not dict
+
+ERROR 2025-06-16 03:03:54,693 log 76394 6299758592 Internal Server Error: /api/heatmapdata/process/
+ERROR 2025-06-16 03:03:54,693 basehttp 76394 6299758592 "POST /api/heatmapdata/process/ HTTP/1.1" 500 553
+ERROR 2025-06-16 05:34:29,088 views 77717 13120335872 ❌ Error processing file: the JSON object must be str, bytes or bytearray, not dict
+Traceback (most recent call last):
+  File "/Users/kevinulrich/Desktop/HeatmapTool/Backend/HeatmapBackend/heatviz/views.py", line 193, in process_data_view
+    response = json.loads(response_data)
+  File "/Users/kevinulrich/anaconda3/envs/heatmapBackend/lib/python3.8/json/__init__.py", line 341, in loads
+    raise TypeError(f'the JSON object must be str, bytes or bytearray, '
+TypeError: the JSON object must be str, bytes or bytearray, not dict
+
+ERROR 2025-06-16 05:34:29,089 log 77717 13120335872 Internal Server Error: /api/heatmapdata/process/
+ERROR 2025-06-16 05:34:29,089 basehttp 77717 13120335872 "POST /api/heatmapdata/process/ HTTP/1.1" 500 544
+ERROR 2025-06-16 05:41:42,937 views 77717 13120335872 ❌ Error processing file: the JSON object must be str, bytes or bytearray, not dict
+Traceback (most recent call last):
+  File "/Users/kevinulrich/Desktop/HeatmapTool/Backend/HeatmapBackend/heatviz/views.py", line 193, in process_data_view
+    response = json.loads(response_data)
+  File "/Users/kevinulrich/anaconda3/envs/heatmapBackend/lib/python3.8/json/__init__.py", line 341, in loads
+    raise TypeError(f'the JSON object must be str, bytes or bytearray, '
+TypeError: the JSON object must be str, bytes or bytearray, not dict
+
+ERROR 2025-06-16 05:41:42,938 log 77717 13120335872 Internal Server Error: /api/heatmapdata/process/
+ERROR 2025-06-16 05:41:42,938 basehttp 77717 13120335872 "POST /api/heatmapdata/process/ HTTP/1.1" 500 544
+ERROR 2025-06-16 05:42:16,832 views 77717 13120335872 ❌ Error processing file: the JSON object must be str, bytes or bytearray, not dict
+Traceback (most recent call last):
+  File "/Users/kevinulrich/Desktop/HeatmapTool/Backend/HeatmapBackend/heatviz/views.py", line 193, in process_data_view
+    response = json.loads(response_data)
+  File "/Users/kevinulrich/anaconda3/envs/heatmapBackend/lib/python3.8/json/__init__.py", line 341, in loads
+    raise TypeError(f'the JSON object must be str, bytes or bytearray, '
+TypeError: the JSON object must be str, bytes or bytearray, not dict
+
+ERROR 2025-06-16 05:42:16,833 log 77717 13120335872 Internal Server Error: /api/heatmapdata/process/
+ERROR 2025-06-16 05:42:16,833 basehttp 77717 13120335872 "POST /api/heatmapdata/process/ HTTP/1.1" 500 544
+ERROR 2025-06-16 05:43:20,831 views 78927 12993523712 ❌ Error processing file: the JSON object must be str, bytes or bytearray, not dict
+Traceback (most recent call last):
+  File "/Users/kevinulrich/Desktop/HeatmapTool/Backend/HeatmapBackend/heatviz/views.py", line 193, in process_data_view
+    response = json.loads(response_data)
+  File "/Users/kevinulrich/anaconda3/envs/heatmapBackend/lib/python3.8/json/__init__.py", line 341, in loads
+    raise TypeError(f'the JSON object must be str, bytes or bytearray, '
+TypeError: the JSON object must be str, bytes or bytearray, not dict
+
+ERROR 2025-06-16 05:43:20,832 log 78927 12993523712 Internal Server Error: /api/heatmapdata/process/
+ERROR 2025-06-16 05:43:20,832 basehttp 78927 12993523712 "POST /api/heatmapdata/process/ HTTP/1.1" 500 544
+ERROR 2025-06-16 05:45:42,505 views 78968 13221261312 ❌ Error processing file: the JSON object must be str, bytes or bytearray, not dict
+Traceback (most recent call last):
+  File "/Users/kevinulrich/Desktop/HeatmapTool/Backend/HeatmapBackend/heatviz/views.py", line 197, in process_data_view
+    response = json.loads(response_data)
+  File "/Users/kevinulrich/anaconda3/envs/heatmapBackend/lib/python3.8/json/__init__.py", line 341, in loads
+    raise TypeError(f'the JSON object must be str, bytes or bytearray, '
+TypeError: the JSON object must be str, bytes or bytearray, not dict
+
+ERROR 2025-06-16 05:45:42,506 log 78968 13221261312 Internal Server Error: /api/heatmapdata/process/
+ERROR 2025-06-16 05:45:42,507 basehttp 78968 13221261312 "POST /api/heatmapdata/process/ HTTP/1.1" 500 544
+ERROR 2025-06-16 10:54:43,048 views 79207 13006565376 ❌ Error processing with strategy: the JSON object must be str, bytes or bytearray, not dict
+Traceback (most recent call last):
+  File "/Users/kevinulrich/Desktop/HeatmapTool/Backend/HeatmapBackend/heatviz/views.py", line 252, in handle_strategy_processing
+    response = json.loads(response_data)
+  File "/Users/kevinulrich/anaconda3/envs/heatmapBackend/lib/python3.8/json/__init__.py", line 341, in loads
+    raise TypeError(f'the JSON object must be str, bytes or bytearray, '
+TypeError: the JSON object must be str, bytes or bytearray, not dict
+
+ERROR 2025-06-16 10:54:43,049 log 79207 13006565376 Internal Server Error: /api/heatmapdata/process/
+ERROR 2025-06-16 10:54:43,049 basehttp 79207 13006565376 "POST /api/heatmapdata/process/ HTTP/1.1" 500 553
+ERROR 2025-06-16 11:14:01,233 views 79327 13136588800 ❌ Error processing with strategy: the JSON object must be str, bytes or bytearray, not dict
+Traceback (most recent call last):
+  File "/Users/kevinulrich/Desktop/HeatmapTool/Backend/HeatmapBackend/heatviz/views.py", line 252, in handle_strategy_processing
+    response = json.loads(response_data)
+  File "/Users/kevinulrich/anaconda3/envs/heatmapBackend/lib/python3.8/json/__init__.py", line 341, in loads
+    raise TypeError(f'the JSON object must be str, bytes or bytearray, '
+TypeError: the JSON object must be str, bytes or bytearray, not dict
+
+ERROR 2025-06-16 11:14:01,234 log 79327 13136588800 Internal Server Error: /api/heatmapdata/process/
+ERROR 2025-06-16 11:14:01,234 basehttp 79327 13136588800 "POST /api/heatmapdata/process/ HTTP/1.1" 500 553
+ERROR 2025-06-16 11:36:17,716 views 79574 6243250176 ❌ Error processing file: the JSON object must be str, bytes or bytearray, not dict
+Traceback (most recent call last):
+  File "/Users/kevinulrich/Desktop/HeatmapTool/Backend/HeatmapBackend/heatviz/views.py", line 197, in process_data_view
+    response = json.loads(response_data)
+  File "/Users/kevinulrich/anaconda3/envs/heatmapBackend/lib/python3.8/json/__init__.py", line 341, in loads
+    raise TypeError(f'the JSON object must be str, bytes or bytearray, '
+TypeError: the JSON object must be str, bytes or bytearray, not dict
+
+ERROR 2025-06-16 11:36:17,717 log 79574 6243250176 Internal Server Error: /api/heatmapdata/process/
+ERROR 2025-06-16 11:36:17,717 basehttp 79574 6243250176 "POST /api/heatmapdata/process/ HTTP/1.1" 500 544
+ERROR 2025-06-16 11:39:34,748 views 79574 6243250176 ❌ Error processing with strategy: the JSON object must be str, bytes or bytearray, not dict
+Traceback (most recent call last):
+  File "/Users/kevinulrich/Desktop/HeatmapTool/Backend/HeatmapBackend/heatviz/views.py", line 252, in handle_strategy_processing
+    response = json.loads(response_data)
+  File "/Users/kevinulrich/anaconda3/envs/heatmapBackend/lib/python3.8/json/__init__.py", line 341, in loads
+    raise TypeError(f'the JSON object must be str, bytes or bytearray, '
+TypeError: the JSON object must be str, bytes or bytearray, not dict
+
+ERROR 2025-06-16 11:39:34,750 log 79574 6243250176 Internal Server Error: /api/heatmapdata/process/
+ERROR 2025-06-16 11:39:34,751 basehttp 79574 6243250176 "POST /api/heatmapdata/process/ HTTP/1.1" 500 553
+ERROR 2025-06-16 11:45:55,507 views 79574 6243250176 ❌ Error processing with strategy: the JSON object must be str, bytes or bytearray, not dict
+Traceback (most recent call last):
+  File "/Users/kevinulrich/Desktop/HeatmapTool/Backend/HeatmapBackend/heatviz/views.py", line 252, in handle_strategy_processing
+    response = json.loads(response_data)
+  File "/Users/kevinulrich/anaconda3/envs/heatmapBackend/lib/python3.8/json/__init__.py", line 341, in loads
+    raise TypeError(f'the JSON object must be str, bytes or bytearray, '
+TypeError: the JSON object must be str, bytes or bytearray, not dict
+
+ERROR 2025-06-16 11:45:55,509 log 79574 6243250176 Internal Server Error: /api/heatmapdata/process/
+ERROR 2025-06-16 11:45:55,509 basehttp 79574 6243250176 "POST /api/heatmapdata/process/ HTTP/1.1" 500 553
+ERROR 2025-06-16 12:18:14,804 views 80109 13215756288 ❌ Error processing file: the JSON object must be str, bytes or bytearray, not dict
+Traceback (most recent call last):
+  File "/Users/kevinulrich/Desktop/HeatmapTool/Backend/HeatmapBackend/heatviz/views.py", line 197, in process_data_view
+    response = json.loads(response_data)
+  File "/Users/kevinulrich/anaconda3/envs/heatmapBackend/lib/python3.8/json/__init__.py", line 341, in loads
+    raise TypeError(f'the JSON object must be str, bytes or bytearray, '
+TypeError: the JSON object must be str, bytes or bytearray, not dict
+
+ERROR 2025-06-16 12:18:14,804 log 80109 13215756288 Internal Server Error: /api/heatmapdata/process/
+ERROR 2025-06-16 12:18:14,805 basehttp 80109 13215756288 "POST /api/heatmapdata/process/ HTTP/1.1" 500 544
+ERROR 2025-06-16 12:22:37,510 views 80169 13304360960 ❌ Error processing file: the JSON object must be str, bytes or bytearray, not dict
+Traceback (most recent call last):
+  File "/Users/kevinulrich/Desktop/HeatmapTool/Backend/HeatmapBackend/heatviz/views.py", line 197, in process_data_view
+    response = json.loads(response_data)
+  File "/Users/kevinulrich/anaconda3/envs/heatmapBackend/lib/python3.8/json/__init__.py", line 341, in loads
+    raise TypeError(f'the JSON object must be str, bytes or bytearray, '
+TypeError: the JSON object must be str, bytes or bytearray, not dict
+
+ERROR 2025-06-16 12:22:37,511 log 80169 13304360960 Internal Server Error: /api/heatmapdata/process/
+ERROR 2025-06-16 12:22:37,511 basehttp 80169 13304360960 "POST /api/heatmapdata/process/ HTTP/1.1" 500 544
+ERROR 2025-06-16 12:26:47,216 views 80209 13216804864 ❌ Error processing file: the JSON object must be str, bytes or bytearray, not dict
+Traceback (most recent call last):
+  File "/Users/kevinulrich/Desktop/HeatmapTool/Backend/HeatmapBackend/heatviz/views.py", line 197, in process_data_view
+    response = json.loads(response_data)
+  File "/Users/kevinulrich/anaconda3/envs/heatmapBackend/lib/python3.8/json/__init__.py", line 341, in loads
+    raise TypeError(f'the JSON object must be str, bytes or bytearray, '
+TypeError: the JSON object must be str, bytes or bytearray, not dict
+
+ERROR 2025-06-16 12:26:47,217 log 80209 13216804864 Internal Server Error: /api/heatmapdata/process/
+ERROR 2025-06-16 12:26:47,218 basehttp 80209 13216804864 "POST /api/heatmapdata/process/ HTTP/1.1" 500 544
+ERROR 2025-06-16 13:20:31,639 log 80274 6237483008 Internal Server Error: /api/heatmapdata/command/
+ERROR 2025-06-16 13:20:31,640 basehttp 80274 6237483008 "POST /api/heatmapdata/command/ HTTP/1.1" 500 558
+ERROR 2025-06-16 13:20:58,204 log 80274 6237483008 Internal Server Error: /api/heatmapdata/command/
+ERROR 2025-06-16 13:20:58,206 basehttp 80274 6237483008 "POST /api/heatmapdata/command/ HTTP/1.1" 500 558
+ERROR 2025-06-16 13:21:56,422 log 80274 6237483008 Internal Server Error: /api/heatmapdata/command/
+ERROR 2025-06-16 13:21:56,424 basehttp 80274 6237483008 "POST /api/heatmapdata/command/ HTTP/1.1" 500 558
+ERROR 2025-06-16 13:24:26,785 log 80274 6237483008 Internal Server Error: /api/heatmapdata/command/
+ERROR 2025-06-16 13:24:26,787 basehttp 80274 6237483008 "POST /api/heatmapdata/command/ HTTP/1.1" 500 558
+ERROR 2025-06-16 18:29:39,641 log 80274 6237483008 Internal Server Error: /api/heatmapdata/command/
+ERROR 2025-06-16 18:29:39,643 basehttp 80274 6237483008 "POST /api/heatmapdata/command/ HTTP/1.1" 500 558
+ERROR 2025-06-16 18:30:09,347 log 80274 6237483008 Internal Server Error: /api/heatmapdata/command/
+ERROR 2025-06-16 18:30:09,349 basehttp 80274 6237483008 "POST /api/heatmapdata/command/ HTTP/1.1" 500 558
+ERROR 2025-06-16 18:31:30,822 log 80274 6237483008 Internal Server Error: /api/heatmapdata/command/
+ERROR 2025-06-16 18:31:30,824 basehttp 80274 6237483008 "POST /api/heatmapdata/command/ HTTP/1.1" 500 558
+ERROR 2025-06-16 18:31:59,225 log 80274 6237483008 Internal Server Error: /api/heatmapdata/command/
+ERROR 2025-06-16 18:31:59,227 basehttp 80274 6237483008 "POST /api/heatmapdata/command/ HTTP/1.1" 500 558
+ERROR 2025-06-16 18:37:53,335 log 80274 6237483008 Internal Server Error: /api/heatmapdata/command/
+ERROR 2025-06-16 18:37:53,336 basehttp 80274 6237483008 "POST /api/heatmapdata/command/ HTTP/1.1" 500 558
+ERROR 2025-06-16 18:40:19,702 log 83463 6408138752 Internal Server Error: /api/heatmapdata/command/
+ERROR 2025-06-16 18:40:19,705 basehttp 83463 6408138752 "POST /api/heatmapdata/command/ HTTP/1.1" 500 558
+ERROR 2025-06-18 15:18:10,856 views 84690 6325039104 ❌ Error processing file: the JSON object must be str, bytes or bytearray, not dict
+Traceback (most recent call last):
+  File "/Users/kevinulrich/Desktop/HeatmapTool/Backend/HeatmapBackend/heatviz/views.py", line 197, in process_data_view
+    response = json.loads(response_data)
+  File "/Users/kevinulrich/anaconda3/envs/heatmapBackend/lib/python3.8/json/__init__.py", line 341, in loads
+    raise TypeError(f'the JSON object must be str, bytes or bytearray, '
+TypeError: the JSON object must be str, bytes or bytearray, not dict
+
+ERROR 2025-06-18 15:18:10,857 log 84690 6325039104 Internal Server Error: /api/heatmapdata/process/
+ERROR 2025-06-18 15:18:10,857 basehttp 84690 6325039104 "POST /api/heatmapdata/process/ HTTP/1.1" 500 544
+ERROR 2025-06-19 18:08:22,670 views 93616 13023080448 ❌ Error processing with strategy: the JSON object must be str, bytes or bytearray, not dict
+Traceback (most recent call last):
+  File "/Users/kevinulrich/Desktop/HeatmapTool/Backend/HeatmapBackend/heatviz/views.py", line 252, in handle_strategy_processing
+    response = json.loads(response_data)
+  File "/Users/kevinulrich/anaconda3/envs/heatmapBackend/lib/python3.8/json/__init__.py", line 341, in loads
+    raise TypeError(f'the JSON object must be str, bytes or bytearray, '
+TypeError: the JSON object must be str, bytes or bytearray, not dict
+
+ERROR 2025-06-19 18:08:22,670 log 93616 13023080448 Internal Server Error: /api/heatmapdata/process/
+ERROR 2025-06-19 18:08:22,671 basehttp 93616 13023080448 "POST /api/heatmapdata/process/ HTTP/1.1" 500 553
+ERROR 2025-06-19 18:26:16,409 views 96992 6305165312 ❌ Error processing file: the JSON object must be str, bytes or bytearray, not dict
+Traceback (most recent call last):
+  File "/Users/kevinulrich/Desktop/HeatmapTool/Backend/HeatmapBackend/heatviz/views.py", line 197, in process_data_view
+    response = json.loads(response_data)
+  File "/Users/kevinulrich/anaconda3/envs/heatmapBackend/lib/python3.8/json/__init__.py", line 341, in loads
+    raise TypeError(f'the JSON object must be str, bytes or bytearray, '
+TypeError: the JSON object must be str, bytes or bytearray, not dict
+
+ERROR 2025-06-19 18:26:16,410 log 96992 6305165312 Internal Server Error: /api/heatmapdata/process/
+ERROR 2025-06-19 18:26:16,410 basehttp 96992 6305165312 "POST /api/heatmapdata/process/ HTTP/1.1" 500 544
+ERROR 2025-06-19 18:31:29,231 views 97049 13140815872 ❌ Error processing file: the JSON object must be str, bytes or bytearray, not dict
+Traceback (most recent call last):
+  File "/Users/kevinulrich/Desktop/HeatmapTool/Backend/HeatmapBackend/heatviz/views.py", line 197, in process_data_view
+    response = json.loads(response_data)
+  File "/Users/kevinulrich/anaconda3/envs/heatmapBackend/lib/python3.8/json/__init__.py", line 341, in loads
+    raise TypeError(f'the JSON object must be str, bytes or bytearray, '
+TypeError: the JSON object must be str, bytes or bytearray, not dict
+
+ERROR 2025-06-19 18:31:29,232 log 97049 13140815872 Internal Server Error: /api/heatmapdata/process/
+ERROR 2025-06-19 18:31:29,232 basehttp 97049 13140815872 "POST /api/heatmapdata/process/ HTTP/1.1" 500 544
+ERROR 2025-07-02 15:23:40,644 views 92167 13004468224 ❌ Error processing file: name 'heatmap_data' is not defined
+Traceback (most recent call last):
+  File "/Users/kevinulrich/Desktop/HeatmapTool/Backend/HeatmapBackend/heatviz/views.py", line 156, in process_data_view
+    all_gene_ids = heatmap_data.get("all_gene_ids", [])
+NameError: name 'heatmap_data' is not defined
+
+ERROR 2025-07-02 15:23:40,645 log 92167 13004468224 Internal Server Error: /api/heatmapdata/process/
+ERROR 2025-07-02 15:23:40,646 basehttp 92167 13004468224 "POST /api/heatmapdata/process/ HTTP/1.1" 500 329
+ERROR 2025-07-02 18:02:01,373 views 54909 13135065088 Async task: 3D coordinate generation failed for session c508e5d2-0951-4908-b043-c91991877e99: 'str' object has no attribute 'get'
+Traceback (most recent call last):
+  File "/Users/kevinulrich/Desktop/HeatmapTool/Backend/HeatmapBackend/heatviz/views.py", line 312, in _generate_and_store_3d_coords_task
+    row_nodes = heatmap_data.get("row_nodes", []) # Get full row_nodes
+AttributeError: 'str' object has no attribute 'get'
+
