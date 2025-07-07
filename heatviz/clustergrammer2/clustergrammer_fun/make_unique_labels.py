@@ -17,6 +17,21 @@ def main(net, df=None):
 
     if len(rows) != len(list(set(rows))):
       print('warning: making row names unique')
+      print(f'🔍 DUPLICATE ROWS DEBUG:')
+      print(f'   Total rows: {len(rows)}')
+      print(f'   Unique rows: {len(list(set(rows)))}')
+      print(f'   Duplicates: {len(rows) - len(list(set(rows)))}')
+      
+      # Find and show duplicates
+      seen = set()
+      duplicates = []
+      for row in rows:
+        if row in seen:
+          duplicates.append(row)
+        else:
+          seen.add(row)
+      print(f'   Sample duplicate names: {duplicates[:10]}')
+      
       new_rows = add_index_list(rows)
       df.index = new_rows
 
@@ -77,12 +92,29 @@ def main(net, df=None):
   return df
 
 def add_index_list(nodes):
-
+  """
+  Make duplicate gene names unique using a suffix that preserves correlation matching.
+  Instead of adding -1, -2, -3, we'll use _dup1, _dup2, _dup3 for easier identification.
+  """
+  
+  # Count occurrences of each node name
+  name_counts = {}
   new_nodes = []
-  for i in range(len(nodes)):
-    index = i + 1
-    inst_node = nodes[i]
-    new_node = inst_node + '-' + str(index)
+  
+  for inst_node in nodes:
+    if inst_node in name_counts:
+      name_counts[inst_node] += 1
+      # Add suffix only to duplicates, keep first occurrence unchanged
+      new_node = inst_node + '_dup' + str(name_counts[inst_node])
+    else:
+      name_counts[inst_node] = 1
+      # Keep first occurrence unchanged for correlation matching
+      new_node = inst_node
+    
     new_nodes.append(new_node)
-
+  
+  print(f'🔧 UNIQUE NAMING RESULT:')
+  print(f'   Original duplicates: {[name for name, count in name_counts.items() if count > 1]}')
+  print(f'   Sample renamed: {[node for node in new_nodes if "_dup" in node][:5]}')
+  
   return new_nodes

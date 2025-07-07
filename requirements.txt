@@ -31,6 +31,7 @@ jupyterlab_widgets==3.0.11
 kiwisolver==1.4.5
 matplotlib==3.7.5
 matplotlib-inline==0.1.7
+networkx==3.2.1
 numpy==1.24.4
 ollama==0.4.7
 packaging==24.1

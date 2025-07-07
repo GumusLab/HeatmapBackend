@@ -1,6 +1,3 @@
-
-
-
 from collections import defaultdict
 import math
 import os
@@ -373,20 +370,22 @@ def position_genes_in_clusters(clusters, cluster_centers, main_radius):
 
 def _generate_and_store_3d_coords_task(session_id: str, heatmap_data: dict, radius: float):
     """
-    Background task to generate a clustered, full-sphere 3D layout and store it.
+    Background task to generate a correlation-informed 3D layout and store it.
+    Hybrid approach: All nodes placed by cluster + strongest edges from correlation network.
     """
     coords_file_path = os.path.join(UPLOAD_DIR, f"{session_id}_coords.json")
 
     try:
-        logger.info(f"Async task: Starting 3D coordinate generation for session: {session_id}")
+        logger.info(f"Async task: Starting correlation-informed 3D coordinate generation for session: {session_id}")
         task_status_cache[session_id] = {
             'status': 'computing',
-            'message': 'Generating clustered 3D sphere layout...'
+            'message': 'Generating correlation-informed 3D layout...'
         }
 
         # Extract row_nodes and build gene list
         row_nodes = heatmap_data.get("row_nodes", [])
         all_gene_ids = [n["name"] for n in row_nodes if "name" in n]
+        logger.info(f"Processing {len(all_gene_ids)} genes for 3D layout")
 
         # Build cluster assignments
         cluster_assignments = {}
@@ -404,23 +403,267 @@ def _generate_and_store_3d_coords_task(session_id: str, heatmap_data: dict, radi
         for gene, cid in cluster_assignments.items():
             clusters_map.setdefault(cid, []).append(gene)
         clusters = [{"id": cid, "nodes": genes} for cid, genes in clusters_map.items()]
+        logger.info(f"Found {len(clusters)} clusters")
 
-        # Position cluster centers
+        # Step 1: Position cluster centers on sphere
         cluster_centers = position_clusters_on_sphere(clusters, radius)
 
-        # Position individual genes
-        global_3d_positions = position_genes_in_clusters(clusters, cluster_centers, radius)
+        # Step 2: Get correlation network for strongest edges using SAME gene names as coordinates
+        logger.info("Computing correlation network for strongest edges...")
+        correlation_edges = []
+        try:
+            # Use the same gene names that were used for clustering (from row_nodes)
+            clustered_gene_names = list(cluster_assignments.keys())
+            logger.info(f"Using {len(clustered_gene_names)} clustered gene names for correlation")
+            
+            # Load the full dataset for correlation computation
+            file_path = os.path.join(UPLOAD_DIR, f"{session_id}.tsv")
+            if os.path.exists(file_path):
+                import pandas as pd
+                from .correlation_engine import compute_correlation_matrix
+                
+                # Load and prepare data
+                df = pd.read_csv(file_path, sep="\t")
+                import numpy as np  # For data quality checks
+                
+                # Filter dataframe to only include genes that are in our clustered data
+                if df.index.name is None:
+                    # If no index name, assume first column is gene names
+                    df = df.set_index(df.columns[0])
+                
+                # Detect where the numeric data matrix starts (exclude metadata rows/columns)
+                matrix_start_row, matrix_start_col = detect_matrix_start(df)
+                logger.info(f"🔍 MATRIX DETECTION:")
+                logger.info(f"   Matrix starts at row={matrix_start_row}, col={matrix_start_col}")
+                logger.info(f"   Original DataFrame shape: {df.shape}")
+                
+                # Extract only the numeric data matrix (excluding metadata)
+                numeric_df = df.iloc[matrix_start_row:, matrix_start_col:]
+                logger.info(f"   Numeric matrix shape: {numeric_df.shape}")
+                logger.info(f"   Numeric matrix index (first 10): {numeric_df.index.tolist()[:10]}")
+                
+                # Convert to numeric, handling any remaining non-numeric values
+                numeric_df = numeric_df.apply(pd.to_numeric, errors='coerce')
+                logger.info(f"   After numeric conversion: {numeric_df.shape}")
+                
+                # Update the DataFrame to use the numeric matrix
+                df = numeric_df
+                logger.info(f"   Updated DataFrame shape: {df.shape}")
+                
+                # Filter to only genes that exist in both datasets
+                # Handle duplicate gene names: map clustered names (with _dup suffixes) to raw names
+                clustered_to_raw_mapping = {}
+                for clustered_gene in clustered_gene_names:
+                    # Remove _dup suffix if present (e.g., 'U1_dup2' -> 'U1')
+                    if '_dup' in clustered_gene:
+                        raw_gene = clustered_gene.split('_dup')[0]
+                    else:
+                        raw_gene = clustered_gene  # Keep as is if no _dup suffix
+                    
+                    if raw_gene in df.index:
+                        clustered_to_raw_mapping[clustered_gene] = raw_gene
+                
+                available_genes = list(clustered_to_raw_mapping.keys())
+                logger.info(f"🔍 UPDATED GENE MAPPING:")
+                logger.info(f"   Found {len(available_genes)} genes common to clustering and numeric matrix")
+                logger.info(f"   Gene mapping examples: {list(clustered_to_raw_mapping.items())[:5]}")
+                logger.info(f"   Sample available genes: {available_genes[:10]}")
+                
+                if len(available_genes) > 5:  # Lower minimum genes for correlation
+                    # Filter dataframe using the raw gene names (without _dup suffixes)
+                    raw_genes_to_use = [clustered_to_raw_mapping[gene] for gene in available_genes]
+                    
+                    logger.info(f"🔍 BEFORE FILTERING DEBUG:")
+                    logger.info(f"   available_genes length: {len(available_genes)}")
+                    logger.info(f"   raw_genes_to_use length: {len(raw_genes_to_use)}")
+                    logger.info(f"   df.shape: {df.shape}")
+                    logger.info(f"   df.index length: {len(df.index)}")
+                    logger.info(f"   First 5 raw_genes_to_use: {raw_genes_to_use[:5]}")
+                    logger.info(f"   First 5 available_genes: {available_genes[:5]}")
+                    
+                    # Check for duplicates in raw_genes_to_use
+                    raw_genes_unique = list(set(raw_genes_to_use))
+                    logger.info(f"   raw_genes_to_use unique length: {len(raw_genes_unique)}")
+                    if len(raw_genes_unique) != len(raw_genes_to_use):
+                        logger.warning(f"   ⚠️ DUPLICATES in raw_genes_to_use!")
+                        from collections import Counter
+                        duplicates = [gene for gene, count in Counter(raw_genes_to_use).items() if count > 1]
+                        logger.warning(f"   Duplicate genes: {duplicates[:10]}")
+                    
+                    # Check for duplicates in DataFrame index
+                    df_index_unique = len(set(df.index))
+                    logger.info(f"   df.index unique length: {df_index_unique}")
+                    if df_index_unique != len(df.index):
+                        logger.warning(f"   ⚠️ DUPLICATES in df.index!")
+                        df_duplicates = df.index[df.index.duplicated()].tolist()
+                        logger.warning(f"   Duplicate df index values: {df_duplicates[:10]}")
+                    
+                    try:
+                        # Handle duplicates properly: use unique genes for correlation
+                        if len(raw_genes_unique) != len(raw_genes_to_use):
+                            logger.info(f"🔧 HANDLING DUPLICATES: Using {len(raw_genes_unique)} unique genes for correlation")
+                            
+                            # Create mapping from unique raw genes to clustered genes
+                            unique_to_clustered = {}
+                            for i, raw_gene in enumerate(raw_genes_to_use):
+                                clustered_gene = available_genes[i]
+                                if raw_gene not in unique_to_clustered:
+                                    unique_to_clustered[raw_gene] = []
+                                unique_to_clustered[raw_gene].append(clustered_gene)
+                            
+                            logger.info(f"   unique_to_clustered mapping examples: {list(unique_to_clustered.items())[:5]}")
+                            
+                            # Build DataFrame with unique genes only
+                            # We need to handle the case where df.index also has duplicates
+                            df_filtered_data = []
+                            unique_clustered_names = []
+                            
+                            for raw_gene in raw_genes_unique:
+                                # Get the first occurrence of this gene in the DataFrame
+                                if raw_gene in df.index:
+                                    # Get first occurrence of this gene
+                                    gene_data = df.loc[raw_gene]
+                                    if isinstance(gene_data, pd.Series):
+                                        # Single occurrence
+                                        df_filtered_data.append(gene_data.values)
+                                    else:
+                                        # Multiple occurrences, take first
+                                        df_filtered_data.append(gene_data.iloc[0].values)
+                                    
+                                    # Use the first clustered gene name
+                                    unique_clustered_names.append(unique_to_clustered[raw_gene][0])
+                                else:
+                                    logger.warning(f"   Gene {raw_gene} not found in DataFrame index")
+                            
+                            # Create new DataFrame with unique genes
+                            df_filtered = pd.DataFrame(df_filtered_data, 
+                                                     index=unique_clustered_names,
+                                                     columns=df.columns)
+                            
+                            logger.info(f"   df_filtered.shape with unique genes: {df_filtered.shape}")
+                            logger.info(f"   unique_clustered_names length: {len(unique_clustered_names)}")
+                            logger.info(f"   Will expand correlation results to include duplicates later")
+                            
+                        else:
+                            # No duplicates, proceed normally
+                            df_filtered = df.loc[raw_genes_to_use]
+                            df_filtered.index = available_genes
+                        
+                        logger.info(f"✅ DataFrame filtering successful")
+                        logger.info(f"   df_filtered.shape: {df_filtered.shape}")
+                        logger.info(f"   Expected shape: ({len(raw_genes_unique)}, {df.shape[1]})")
+                    except Exception as filter_error:
+                        logger.error(f"❌ DataFrame filtering failed: {filter_error}")
+                        logger.error(f"   Error type: {type(filter_error)}")
+                        logger.error(f"   raw_genes_to_use that don't exist in df.index:")
+                        missing_genes = [gene for gene in raw_genes_to_use if gene not in df.index]
+                        logger.error(f"   Missing genes: {missing_genes[:10]} (showing first 10)")
+                        raise filter_error
+                    
+
+                    
+                    logger.info(f"Filtered DataFrame shape: {df_filtered.shape}")
+                    logger.info(f"Filtered DataFrame sample values: {df_filtered.iloc[0, :5].tolist()}")
+                    
+                    # Check data quality for correlation engine
+                    logger.info(f"Data quality check:")
+                    logger.info(f"   NaN values: {df_filtered.isnull().sum().sum()}")
+                    logger.info(f"   Infinite values: {np.isinf(df_filtered.values).sum()}")
+                    logger.info(f"   Data type: {df_filtered.dtypes.iloc[0]}")
+                    logger.info(f"   Value range: {df_filtered.values.min():.3f} to {df_filtered.values.max():.3f}")
+                    
+                    # Check for constant genes (zero variance)
+                    gene_variances = df_filtered.var(axis=1)
+                    zero_var_genes = (gene_variances == 0).sum()
+                    logger.info(f"   Genes with zero variance: {zero_var_genes}")
+                    logger.info(f"   Sample variances: {gene_variances.head().tolist()}")
+                    
+                    # Use correlation engine with settings for strongest edges only
+                    correlation_filters = {
+                        'correlationThreshold': 0.1,  # Very low threshold to see any edges
+                        'pValueThreshold': 0.1,       # More lenient p-value
+                        'maxCorrelations': 5000,      # Limit edges to avoid hairball
+                        'variancePercentile': 0.1,    # Include more genes
+                        'minSamples': 5               # Lower minimum samples
+                    }
+                    
+                    # Debug: Inspect the DataFrame being passed to correlation engine
+                    logger.info(f"🔍 CORRELATION INPUT DEBUG:")
+                    logger.info(f"   DataFrame shape: {df_filtered.shape}")
+                    logger.info(f"   DataFrame index (first 10): {df_filtered.index.tolist()[:10]}")
+                    logger.info(f"   DataFrame columns (first 5): {df_filtered.columns.tolist()[:5]}")
+                    logger.info(f"   DataFrame dtypes: {df_filtered.dtypes.unique()}")
+                    logger.info(f"   Sample data (first gene, first 5 samples):")
+                    logger.info(f"     {df_filtered.iloc[0, :5].tolist()}")
+                    logger.info(f"   Index type: {type(df_filtered.index)}")
+                    logger.info(f"   Any duplicate indices: {df_filtered.index.duplicated().any()}")
+                    if df_filtered.index.duplicated().any():
+                        duplicated_indices = df_filtered.index[df_filtered.index.duplicated()].tolist()
+                        logger.info(f"   Duplicate indices: {duplicated_indices[:10]}")
+                    
+                    logger.info(f"Calling correlation engine with filters: {correlation_filters}")
+                    correlation_result = compute_correlation_matrix(df_filtered, correlation_filters)
+                    logger.info(f"Correlation result keys: {list(correlation_result.keys())}")
+                    
+                    if "correlations" in correlation_result:
+                        correlation_edges = correlation_result["correlations"]
+                        logger.info(f"Found {len(correlation_edges)} strong correlation edges using clustered gene names")
+                    else:
+                        logger.warning("No correlations found, proceeding with cluster-only layout")
+                        logger.warning(f"Correlation result: {correlation_result}")
+                        
+                        # Try with even more lenient settings
+                        logger.info("Trying with ultra-lenient settings...")
+                        ultra_lenient_filters = {
+                            'correlationThreshold': 0.01,  # Almost any correlation
+                            'pValueThreshold': 0.5,        # Very lenient p-value
+                            'maxCorrelations': 10000,      # More edges
+                            'variancePercentile': 0.01,    # Include almost all genes
+                            'minSamples': 3                # Very low minimum samples
+                        }
+                        logger.info(f"Ultra-lenient filters: {ultra_lenient_filters}")
+                        ultra_result = compute_correlation_matrix(df_filtered, ultra_lenient_filters)
+                        logger.info(f"Ultra-lenient result keys: {list(ultra_result.keys())}")
+                        if "correlations" in ultra_result:
+                            correlation_edges = ultra_result["correlations"]
+                            logger.info(f"Ultra-lenient found {len(correlation_edges)} edges!")
+                        else:
+                            logger.warning(f"Even ultra-lenient failed: {ultra_result}")
+                else:
+                    logger.warning(f"Too few common genes ({len(available_genes)}), proceeding with cluster-only layout")
+                    logger.warning(f"Clustered genes sample: {clustered_gene_names[:10]}")
+                    logger.warning(f"DataFrame index sample: {df.index.tolist()[:10]}")
+            else:
+                logger.warning(f"Session file not found: {file_path}")
+        except Exception as e:
+            logger.warning(f"Failed to compute correlations: {e}, proceeding with cluster-only layout")
+
+        # Step 3: Position individual genes with correlation refinement
+        global_3d_positions = position_genes_with_correlation_refinement(
+            clusters, cluster_centers, radius, correlation_edges
+        )
+
+        # Step 4: Store both coordinates and edge information
+        result_data = {
+            'coordinates': global_3d_positions,
+            'correlation_edges': correlation_edges[:1000],  # Limit edges for frontend
+            'cluster_info': {
+                'clusters': clusters,
+                'cluster_centers': {str(cid): {'x': center[0], 'y': center[1], 'z': center[2]} 
+                                  for cid, center in cluster_centers.items()}
+            }
+        }
 
         # Persist to disk
         with open(coords_file_path, 'w') as f:
-            json.dump(global_3d_positions, f)
+            json.dump(result_data, f)
 
         task_status_cache[session_id] = {
             'status': 'ready',
-            'message': '3D layout ready.',
-            'data': global_3d_positions
+            'message': '3D correlation-informed layout ready.',
+            'data': result_data
         }
-        logger.info(f"Async task: 3D coordinates saved to: {coords_file_path}")
+        logger.info(f"Async task: 3D coordinates with {len(correlation_edges)} edges saved to: {coords_file_path}")
 
     except Exception as e:
         tb = traceback.format_exc()
@@ -430,6 +673,210 @@ def _generate_and_store_3d_coords_task(session_id: str, heatmap_data: dict, radi
             'message': f"Failed to generate 3D layout: {str(e)}"
         }
 
+
+def position_genes_with_correlation_refinement(clusters, cluster_centers, radius, correlation_edges):
+    """
+    Position genes in clusters with correlation-based refinement.
+    Enhanced to allow inter-cluster correlations to influence positioning.
+    """
+    import math
+    import random
+    
+    gene_positions = {}
+    
+    # Build edge lookup for quick access
+    edge_lookup = {}
+    for edge in correlation_edges:
+        gene1, gene2 = edge['gene1'], edge['gene2']
+        correlation = edge['correlation']
+        edge_lookup.setdefault(gene1, []).append((gene2, correlation))
+        edge_lookup.setdefault(gene2, []).append((gene1, correlation))
+    
+    logger.info(f"🔗 Built edge lookup with {len(correlation_edges)} edges")
+    
+    # Always prefer cluster-based layout to maintain cluster grouping
+    # Only use global layout for very sparse networks with few clusters
+    if len(correlation_edges) > 1000 and len(clusters) <= 2:
+        try:
+            import networkx as nx
+            
+            # Build global network with all genes and strong correlations
+            G_global = nx.Graph()
+            all_genes = []
+            for cluster in clusters:
+                all_genes.extend(cluster["nodes"])
+            
+            # Add all genes as nodes
+            for gene in all_genes:
+                G_global.add_node(gene)
+            
+            # Add strong correlations as edges (both intra and inter-cluster)
+            strong_edges = 0
+            for edge in correlation_edges:
+                if abs(edge['correlation']) > 0.5:  # Higher threshold for global layout
+                    G_global.add_edge(edge['gene1'], edge['gene2'], weight=abs(edge['correlation']))
+                    strong_edges += 1
+            
+            logger.info(f"🌐 Global network: {len(all_genes)} genes, {strong_edges} strong edges")
+            
+            if G_global.number_of_edges() > 0:
+                # Use 3D spring layout for the entire network
+                logger.info("🚀 Using global 3D spring layout with correlation influence")
+                pos_global = nx.spring_layout(G_global, dim=3, k=radius*0.1, iterations=100, seed=42)
+                
+                # Scale positions to fit within sphere
+                max_dist = 0
+                for pos in pos_global.values():
+                    dist = math.sqrt(pos[0]**2 + pos[1]**2 + pos[2]**2)
+                    max_dist = max(max_dist, dist)
+                
+                scale_factor = radius * 0.8 / (max_dist or 1)
+                
+                for gene in all_genes:
+                    if gene in pos_global:
+                        pos = pos_global[gene]
+                        x = pos[0] * scale_factor
+                        y = pos[1] * scale_factor
+                        z = pos[2] * scale_factor
+                        
+                        # Add slight jitter and project to sphere surface
+                        jitter = 1 + (random.random() - 0.5) * 0.1
+                        norm = math.sqrt(x*x + y*y + z*z) or 1
+                        factor = radius * jitter / norm
+                        
+                        gene_positions[gene] = {"x": x * factor, "y": y * factor, "z": z * factor}
+                
+                logger.info(f"✅ Global layout positioned {len(gene_positions)} genes")
+                return gene_positions
+                
+        except Exception as e:
+            logger.warning(f"Global layout failed: {e}, falling back to cluster-based layout")
+    
+    # Fallback to cluster-based positioning with enhanced inter-cluster awareness
+    logger.info("🏘️ Using enhanced cluster-based positioning for better visual grouping")
+    
+    for cluster in clusters:
+        cid = cluster["id"]
+        genes = cluster["nodes"]
+        M = len(genes)
+        cx, cy, cz = cluster_centers[cid]
+        
+        # Base cluster radius scales with cluster size
+        base_cluster_radius = (M ** (1/3)) * (radius * 0.12)  # Larger clusters for better visibility
+        
+        if M == 1:
+            # Singleton: place at cluster center projected to sphere
+            norm = math.sqrt(cx*cx + cy*cy + cz*cz)
+            factor = radius / (norm or 1)
+            gene_positions[genes[0]] = {"x": cx * factor, "y": cy * factor, "z": cz * factor}
+            continue
+        
+        # For clusters with multiple genes, use correlation-informed positioning
+        genes_with_correlations = [g for g in genes if g in edge_lookup]
+        
+        if len(genes_with_correlations) > 1:
+            try:
+                import networkx as nx
+                # Build subgraph for this cluster with enhanced connectivity
+                G = nx.Graph()
+                for gene in genes:
+                    G.add_node(gene)
+                
+                # Add edges within cluster AND strong inter-cluster edges
+                for gene in genes:
+                    if gene in edge_lookup:
+                        for neighbor, correlation in edge_lookup[gene]:
+                            abs_corr = abs(correlation)
+                            # Include intra-cluster edges (lower threshold) and strong inter-cluster edges
+                            if neighbor in genes and abs_corr > 0.1:  # Intra-cluster (lower threshold)
+                                G.add_edge(gene, neighbor, weight=abs_corr)
+                            elif neighbor not in genes and abs_corr > 0.6:  # Strong inter-cluster
+                                # Add phantom node for inter-cluster influence
+                                phantom_id = f"phantom_{neighbor}"
+                                G.add_node(phantom_id)
+                                G.add_edge(gene, phantom_id, weight=abs_corr * 0.3)
+                
+                if G.number_of_edges() > 0:
+                    # Use spring layout in 3D with more iterations for tighter clustering
+                    pos = nx.spring_layout(G, dim=3, k=base_cluster_radius/2, iterations=30, seed=42)
+                    
+                    # Scale and translate to cluster position
+                    for gene in genes:
+                        if gene in pos:
+                            local_pos = pos[gene]
+                            # Scale to cluster size and translate to cluster center
+                            x = cx + local_pos[0] * base_cluster_radius
+                            y = cy + local_pos[1] * base_cluster_radius  
+                            z = cz + local_pos[2] * base_cluster_radius
+                            
+                            # Project back to sphere surface with jitter
+                            norm = math.sqrt(x*x + y*y + z*z) or 1
+                            jitter = 1 + (random.random() - 0.5) * 0.05  # Less jitter for tighter clusters
+                            factor = radius * jitter / norm
+                            gene_positions[gene] = {"x": x * factor, "y": y * factor, "z": z * factor}
+                        else:
+                            # Fallback for isolated nodes
+                            gene_positions[gene] = _position_gene_in_cluster_fallback(
+                                genes.index(gene), M, cx, cy, cz, base_cluster_radius, radius
+                            )
+                    print(f"Iteration completed for cluster {cid}")
+                else:
+                    # No edges in cluster, use original positioning
+                    for j, gene in enumerate(genes):
+                        gene_positions[gene] = _position_gene_in_cluster_fallback(
+                            j, M, cx, cy, cz, base_cluster_radius, radius
+                        )
+                        
+            except ImportError:
+                logger.warning("NetworkX not available, using fallback positioning")
+                for j, gene in enumerate(genes):
+                    gene_positions[gene] = _position_gene_in_cluster_fallback(
+                        j, M, cx, cy, cz, base_cluster_radius, radius
+                    )
+            except Exception as e:
+                logger.warning(f"Spring layout failed: {e}, using fallback")
+                for j, gene in enumerate(genes):
+                    gene_positions[gene] = _position_gene_in_cluster_fallback(
+                        j, M, cx, cy, cz, base_cluster_radius, radius
+                    )
+        else:
+            # No correlations available, use original fibonacci spiral
+            for j, gene in enumerate(genes):
+                gene_positions[gene] = _position_gene_in_cluster_fallback(
+                    j, M, cx, cy, cz, base_cluster_radius, radius
+                )
+    
+    logger.info(f"✅ Cluster-based layout positioned {len(gene_positions)} genes in {len(clusters)} clusters")
+    return gene_positions
+
+
+def _position_gene_in_cluster_fallback(j, M, cx, cy, cz, cluster_radius, main_radius):
+    """
+    Fallback positioning using fibonacci spiral (original logic).
+    """
+    import math
+    import random
+    
+    golden_angle = math.pi * (3 - math.sqrt(5))
+    y0 = 1 - (2 * j) / (M - 1)
+    r0 = math.sqrt(max(0.0, 1 - y0*y0))
+    theta0 = golden_angle * j
+
+    lx = math.cos(theta0) * r0 * cluster_radius
+    ly = y0 * cluster_radius
+    lz = math.sin(theta0) * r0 * cluster_radius
+
+    # World position before projection
+    wx = cx + lx
+    wy = cy + ly
+    wz = cz + lz
+
+    # Normalize + jitter back to sphere surface
+    norm = math.sqrt(wx*wx + wy*wy + wz*wz) or 1
+    jitter = 1 + (random.random() - 0.5) * 0.1
+    factor = main_radius * jitter / norm
+    
+    return {"x": wx * factor, "y": wy * factor, "z": wz * factor}
 
 @api_view(['POST'])
 @parser_classes([MultiPartParser])
@@ -526,9 +973,8 @@ def get_3d_coords_view(request, session_id: str):
     coords_file_path = os.path.join(UPLOAD_DIR, f"{session_id}_coords.json")
 
 
-    print('**************** polling in to check whether the 3d coords file is created or not **************')
-
-    print('************* task info is as follows ****************',task_status_cache)
+    # print('**************** polling in to check whether the 3d coords file is created or not **************')
+    # print('************* task info is as follows ****************',task_status_cache)
     
     # Prioritize checking the file system for the coordinates file
     if os.path.exists(coords_file_path):
@@ -536,6 +982,17 @@ def get_3d_coords_view(request, session_id: str):
             with open(coords_file_path, 'r') as f:
                 global_3d_positions = json.load(f) # json.load is correct for file objects
             logger.info(f"Successfully retrieved 3D coordinates for session: {session_id} from file.")
+            
+            # Log correlation edge information without printing full coordinate data
+            correlation_edges = global_3d_positions.get('correlation_edges', [])
+            coordinates = global_3d_positions.get('coordinates', {})
+            cluster_info = global_3d_positions.get('cluster_info', {})
+            
+            logger.info(f"📊 3D Data Summary for session {session_id}:")
+            logger.info(f"   - Coordinates: {len(coordinates)} genes")
+            logger.info(f"   - Correlation edges: {len(correlation_edges)} edges")
+            logger.info(f"   - Clusters: {len(cluster_info.get('clusters', []))} clusters")
+            
             # If file exists and is valid, update cache to 'ready' (important for subsequent checks)
             task_status_cache[session_id] = {'status': 'ready', 'message': '3D layout ready.'}
             return JsonResponse({
@@ -1388,9 +1845,9 @@ def correlation_network(request):
         
         # Set intelligent defaults if not provided
         optimized_filters = {
-            'correlationThreshold': filters.get('correlationThreshold', 0.5),  # More realistic default
-            'pValueThreshold': filters.get('pValueThreshold', 0.1),           # Less strict default
-            'maxCorrelations': filters.get('maxCorrelations', 50000),
+            'correlationThreshold': filters.get('correlationThreshold', 0.7),  # More realistic default
+            'pValueThreshold': filters.get('pValueThreshold', 0.05),           # Less strict default
+            'maxCorrelations': filters.get('maxCorrelations', 100000),
             'variancePercentile': filters.get('variancePercentile', 0.2),     # Keep top 80%
             'minSamples': filters.get('minSamples', 10),
             **filters  # Preserve any additional filters

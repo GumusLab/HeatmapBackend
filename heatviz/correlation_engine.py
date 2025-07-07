@@ -206,12 +206,19 @@ def compute_correlation_matrix(df, filters):
     """
     try:
         print("🚀 Ultra-Optimized Correlation Engine Starting...")
+        print(f"📊 INPUT DEBUG: DataFrame shape: {df.shape}")
+        print(f"📊 INPUT DEBUG: DataFrame index type: {type(df.index)}")
+        print(f"📊 INPUT DEBUG: DataFrame columns type: {type(df.columns)}")
+        print(f"📊 INPUT DEBUG: First 5 index values: {df.index.tolist()[:5]}")
+        print(f"📊 INPUT DEBUG: First 5 column values: {df.columns.tolist()[:5]}")
+        print(f"📊 INPUT DEBUG: Sample data types: {df.dtypes.unique()}")
+        
         start_time = time.time()
         
         # Extract parameters with optimized defaults
-        correlation_threshold = filters.get('correlationThreshold', 0.3)  # More realistic default
-        p_value_threshold = filters.get('pValueThreshold', 0.1)           # Less strict default
-        max_correlations = filters.get('maxCorrelations', 50000)
+        correlation_threshold = filters.get('correlationThreshold', 0.7)  # More realistic default
+        p_value_threshold = filters.get('pValueThreshold', 0.05)           # Less strict default
+        max_correlations = filters.get('maxCorrelations', 100000)
         n_processes = filters.get('nProcesses', mp.cpu_count())
         min_samples = filters.get('minSamples', 10)
         variance_percentile = filters.get('variancePercentile', 0.2)      # Keep top 80%
@@ -220,45 +227,122 @@ def compute_correlation_matrix(df, filters):
         print(f"📊 P-value threshold: {p_value_threshold}")
         print(f"🔥 Using {n_processes} CPU cores")
         
-        # Detect matrix structure (works with your TSV format)
-        matrix_start_row, matrix_start_col = detect_matrix_start(df)
+        # Check if DataFrame is already a clean numeric matrix
+        # If most values are already numeric, skip matrix detection
+        sample_values = df.iloc[:min(10, df.shape[0]), :min(10, df.shape[1])].values.flatten()
+        numeric_count = 0
+        total_count = 0
         
-        # Extract numeric data matrix and gene metadata
-        data_matrix = df.iloc[matrix_start_row:, matrix_start_col:]
-        gene_metadata = df.iloc[matrix_start_row:, :matrix_start_col]
+        for val in sample_values:
+            if pd.notna(val):
+                total_count += 1
+                try:
+                    float(val)
+                    numeric_count += 1
+                except (ValueError, TypeError):
+                    pass
+        
+        is_already_numeric = (total_count > 0 and numeric_count / total_count > 0.8)
+        print(f"🔍 NUMERIC CHECK: {numeric_count}/{total_count} values are numeric ({numeric_count/total_count:.2%})")
+        
+        if is_already_numeric:
+            print("🎯 DataFrame is already a clean numeric matrix, skipping matrix detection")
+            data_matrix = df
+            gene_metadata = pd.DataFrame(index=df.index)  # Empty metadata
+            print(f"📊 AFTER SKIP: data_matrix shape: {data_matrix.shape}")
+            print(f"📊 AFTER SKIP: gene_metadata shape: {gene_metadata.shape}")
+        else:
+            print("🔍 Detecting matrix structure in TSV format")
+            # Detect matrix structure (works with your TSV format)
+            matrix_start_row, matrix_start_col = detect_matrix_start(df)
+            
+            # Extract numeric data matrix and gene metadata
+            data_matrix = df.iloc[matrix_start_row:, matrix_start_col:]
+            gene_metadata = df.iloc[matrix_start_row:, :matrix_start_col]
+            print(f"📊 AFTER DETECTION: data_matrix shape: {data_matrix.shape}")
+            print(f"📊 AFTER DETECTION: gene_metadata shape: {gene_metadata.shape}")
         
         print(f"📈 Data matrix shape: {data_matrix.shape}")
         
         # Convert to numeric and clean data
-        data_matrix = data_matrix.apply(pd.to_numeric, errors='coerce')
+        print("🔄 Converting to numeric...")
+        print(f"📊 BEFORE NUMERIC CONVERSION: data_matrix shape: {data_matrix.shape}")
+        print(f"📊 BEFORE NUMERIC CONVERSION: data_matrix index length: {len(data_matrix.index)}")
+        
+        try:
+            data_matrix = data_matrix.apply(pd.to_numeric, errors='coerce')
+            print(f"📊 AFTER NUMERIC CONVERSION: data_matrix shape: {data_matrix.shape}")
+            print(f"📊 AFTER NUMERIC CONVERSION: data_matrix index length: {len(data_matrix.index)}")
+        except Exception as e:
+            print(f"❌ ERROR during numeric conversion: {str(e)}")
+            raise e
         
         # Optimized pre-filtering for speed
         print("🧹 Optimized pre-filtering...")
         
         # Filter 1: Remove genes with too much missing data
         missing_threshold = 0.7  # 70% complete
-        gene_completeness = 1 - (data_matrix.isnull().sum(axis=1) / data_matrix.shape[1])
-        complete_genes = gene_completeness[gene_completeness >= missing_threshold].index
+        print(f"📊 BEFORE MISSING FILTER: data_matrix shape: {data_matrix.shape}")
+        
+        try:
+            gene_completeness = 1 - (data_matrix.isnull().sum(axis=1) / data_matrix.shape[1])
+            complete_genes = gene_completeness[gene_completeness >= missing_threshold].index
+            print(f"📊 AFTER MISSING FILTER: {len(complete_genes)} genes remain")
+        except Exception as e:
+            print(f"❌ ERROR during missing value filtering: {str(e)}")
+            raise e
         
         # Filter 2: Remove low-variance genes
-        gene_variances = data_matrix.loc[complete_genes].var(axis=1, skipna=True)
-        variance_threshold = gene_variances.quantile(variance_percentile)
-        high_var_genes = gene_variances[gene_variances >= variance_threshold].index
+        print(f"📊 BEFORE VARIANCE FILTER: complete_genes length: {len(complete_genes)}")
         
-        print(f"✅ Genes after filtering: {len(high_var_genes)} (from {data_matrix.shape[0]})")
+        try:
+            gene_variances = data_matrix.loc[complete_genes].var(axis=1, skipna=True)
+            variance_threshold = gene_variances.quantile(variance_percentile)
+            high_var_genes = gene_variances[gene_variances >= variance_threshold].index
+            
+            print(f"✅ Genes after filtering: {len(high_var_genes)} (from {data_matrix.shape[0]})")
+            print(f"📊 AFTER VARIANCE FILTER: high_var_genes length: {len(high_var_genes)}")
+        except Exception as e:
+            print(f"❌ ERROR during variance filtering: {str(e)}")
+            print(f"❌ ERROR DETAILS: complete_genes type: {type(complete_genes)}")
+            print(f"❌ ERROR DETAILS: complete_genes length: {len(complete_genes)}")
+            print(f"❌ ERROR DETAILS: data_matrix.index length: {len(data_matrix.index)}")
+            raise e
         
         if len(high_var_genes) < 2:
             return {"error": "Not enough valid genes after filtering"}
         
         # Prepare data for ultra-fast computation
-        data_matrix_clean = data_matrix.loc[high_var_genes].fillna(np.nan)
-        gene_metadata_clean = gene_metadata.loc[high_var_genes]
+        print("🔄 Preparing data for computation...")
+        print(f"📊 BEFORE CLEAN: data_matrix shape: {data_matrix.shape}")
+        print(f"📊 BEFORE CLEAN: gene_metadata shape: {gene_metadata.shape}")
+        
+        try:
+            data_matrix_clean = data_matrix.loc[high_var_genes].fillna(np.nan)
+            gene_metadata_clean = gene_metadata.loc[high_var_genes]
+            
+            print(f"📊 AFTER CLEAN: data_matrix_clean shape: {data_matrix_clean.shape}")
+            print(f"📊 AFTER CLEAN: gene_metadata_clean shape: {gene_metadata_clean.shape}")
+        except Exception as e:
+            print(f"❌ ERROR during data preparation: {str(e)}")
+            print(f"❌ ERROR DETAILS: high_var_genes type: {type(high_var_genes)}")
+            print(f"❌ ERROR DETAILS: high_var_genes length: {len(high_var_genes)}")
+            print(f"❌ ERROR DETAILS: data_matrix.index length: {len(data_matrix.index)}")
+            print(f"❌ ERROR DETAILS: gene_metadata.index length: {len(gene_metadata.index)}")
+            raise e
         
         # Convert to optimized numpy arrays
         data_matrix_values = data_matrix_clean.values.astype(np.float32)  # Memory efficient
         
+        print(f"📊 NUMPY ARRAY: data_matrix_values shape: {data_matrix_values.shape}")
+        
         # Get gene IDs (compatible with your format)
+        print("🔄 Extracting gene IDs...")
         gene_ids = []
+        
+        print(f"📊 GENE ID EXTRACTION: gene_metadata_clean.columns: {gene_metadata_clean.columns.tolist()}")
+        print(f"📊 GENE ID EXTRACTION: gene_metadata_clean index length: {len(gene_metadata_clean.index)}")
+        
         for idx in gene_metadata_clean.index:
             # Try different possible gene ID columns
             if len(gene_metadata_clean.columns) > 0:
@@ -266,8 +350,11 @@ def compute_correlation_matrix(df, filters):
                 if gene_id in ['nan', '', 'None']:
                     gene_id = f"Gene_{idx}"
             else:
-                gene_id = f"Gene_{idx}"
+                gene_id = str(idx)  # Use index directly if no metadata columns
             gene_ids.append(gene_id)
+        
+        print(f"📊 GENE IDS: Extracted {len(gene_ids)} gene IDs")
+        print(f"📊 GENE IDS: First 10 gene IDs: {gene_ids[:10]}")
         
         # Generate gene pairs efficiently
         total_genes = len(gene_ids)
@@ -424,7 +511,7 @@ def _process_large_dataset_parallel(data_matrix_values, gene_ids, correlation_th
     print(f"📦 Processing {len(chunk_pairs)} non-overlapping chunks")
     
     # Min-heap for top-N edges (by |r|)
-    min_heap = []  # (absCorrelation, dict)
+    min_heap = []  # (absCorrelation, gene_pair, dict)
     computation_start = time.time()
     
     with ProcessPoolExecutor(max_workers=n_processes) as executor:
@@ -444,12 +531,13 @@ def _process_large_dataset_parallel(data_matrix_values, gene_ids, correlation_th
                 chunk_correlations = future.result()
                 for corr in chunk_correlations:
                     abs_corr = abs(corr['correlation'])
+                    gene_pair = tuple(sorted([corr['gene1'], corr['gene2']]))
+                    heap_item = (abs_corr, gene_pair, corr)
                     if len(min_heap) < max_correlations:
-                        heapq.heappush(min_heap, (abs_corr, corr))
+                        heapq.heappush(min_heap, heap_item)
                     else:
-                        # Only push if stronger than the weakest in heap
                         if abs_corr > min_heap[0][0]:
-                            heapq.heappushpop(min_heap, (abs_corr, corr))
+                            heapq.heappushpop(min_heap, heap_item)
                 print(f"🔄 Completed chunk {chunk_idx + 1}/{len(chunk_pairs)} "
                       f"({len(chunk_correlations):,} significant)")
             except Exception as e:
@@ -458,7 +546,7 @@ def _process_large_dataset_parallel(data_matrix_values, gene_ids, correlation_th
     computation_time = time.time() - computation_start
     
     # Extract and sort the top-N edges by |r| descending
-    final_correlations = [item[1] for item in sorted(min_heap, key=lambda x: x[0], reverse=True)]
+    final_correlations = [item[2] for item in sorted(min_heap, key=lambda x: x[0], reverse=True)]
     
     pairs_per_second = total_pairs / computation_time if computation_time > 0 else 0
     
@@ -530,7 +618,7 @@ def _process_chunk_wrapper_fast(data_matrix, gene_pairs, correlation_threshold,
 
 # Additional utility functions for your existing backend
 
-def estimate_correlation_job_time(n_genes, correlation_threshold=0.3):
+def estimate_correlation_job_time(n_genes, correlation_threshold=0.7):
     """
     Estimate computation time for correlation analysis.
     Useful for showing progress to users.

@@ -125,7 +125,7 @@ LOGGING = {
             'formatter': 'verbose',
         },
         'file': {
-            'level': 'ERROR',
+            'level': 'INFO',
             'class': 'logging.FileHandler',
             'filename': os.path.join(BASE_DIR, 'django_error.log'),
             'formatter': 'verbose',
@@ -139,7 +139,7 @@ LOGGING = {
         },
         'heatviz': {  
             'handlers': ['console', 'file'],
-            'level': 'ERROR',
+            'level': 'INFO',
             'propagate': True,
         },
     },
