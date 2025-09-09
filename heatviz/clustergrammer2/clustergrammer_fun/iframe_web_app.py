@@ -21,7 +21,7 @@ def main(net, filename=None, width=1000, height=800):
 
     r = requests.post(clustergrammer_url, files={'file': (fake_filename, file_obj)})
   else:
-    file_obj = open(filename, 'r')
+    file_obj = open(filename, 'r', encoding='utf-8')
     r = requests.post(clustergrammer_url, files={'file': file_obj})
 
 

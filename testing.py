@@ -3,6 +3,7 @@ import time
 from scipy.spatial.distance import pdist, cdist, squareform
 from joblib import Parallel, delayed
 import psutil
+from heatviz.clustergrammer2.clustergrammer_fun.calc_clust import optimized_distance_matrix
 
 def calculate_free_cores():
     # Get the number of logical CPUs
@@ -81,7 +82,7 @@ large_matrix = np.random.rand(20000, 600)
 
 # Measure the time for the parallelized function
 start_time = time.time()
-distance_matrix_parallel = parallel_distance_matrix(large_matrix, metric='cosine', axis='row', n_jobs=6)
+distance_matrix_parallel = optimized_distance_matrix(large_matrix, axis='row', metric='cosine',n_jobs=6)
 parallel_time = time.time() - start_time
 print(f"Parallel distance matrix calculation took {parallel_time:.4f} seconds.")
 

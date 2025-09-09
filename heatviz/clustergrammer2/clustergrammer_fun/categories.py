@@ -152,23 +152,43 @@ def calc_cat_clust_order(net, inst_rc):
   '''
   cluster category subset of data
   '''
+  print(f"🔍 DEBUG calc_cat_clust_order: Starting for axis '{inst_rc}'")
   from .__init__ import Network
   from copy import deepcopy
   from . import calc_clust, run_filter
 
   inst_keys = list(net.dat['node_info'][inst_rc].keys())
+  print(f"🔍 DEBUG: inst_keys = {inst_keys}")
   all_cats = [x for x in inst_keys if 'cat-' in x]
+  print(f"🔍 DEBUG: all_cats = {all_cats}")
 
   if len(all_cats) > 0:
 
     for inst_name_cat in all_cats:
+      print(f"🔍 DEBUG: Processing category '{inst_name_cat}'")
 
       tmp_name = 'dict_' + inst_name_cat.replace('-', '_')
+      print(f"🔍 DEBUG: Looking for dict name '{tmp_name}'")
       dict_cat = net.dat['node_info'][inst_rc][tmp_name]
+      print(f"🔍 DEBUG: dict_cat type = {type(dict_cat)}, keys = {list(dict_cat.keys()) if isinstance(dict_cat, dict) else 'Not a dict'}")
 
       unordered_cats = dict_cat.keys()
-
+      print(f"🔍 DEBUG: unordered_cats = {list(unordered_cats)}")
+      
+      # Check for NaN values in the categories
+      nan_categories = [cat for cat in unordered_cats if str(cat) == 'nan']
+      total_cats = len(list(unordered_cats))
+      
+      if len(nan_categories) == total_cats:
+        print(f"🔍 DEBUG: All {total_cats} categories are NaN - skipping category processing for {inst_name_cat}")
+        continue  # Skip this category entirely
+      elif nan_categories:
+        print(f"🔍 DEBUG: Found {len(nan_categories)}/{total_cats} NaN categories - filtering them out")
+        # Filter out NaN categories
+        unordered_cats = [cat for cat in unordered_cats if str(cat) != 'nan']
+      
       ordered_cats = order_categories(unordered_cats)
+      print(f"🔍 DEBUG: order_categories completed")
 
       # this is the ordering of the columns based on their category, not
       # including their clustering ordering within category

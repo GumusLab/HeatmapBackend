@@ -21,7 +21,7 @@ from scipy.spatial.distance import pdist
 from sklearn.metrics import confusion_matrix
 import random
 from itertools import combinations
-import matplotlib.pyplot as plt
+# import matplotlib.pyplot as plt
 import json
 import ipywidgets as widgets
 import statsmodels.stats.multitest as smm
@@ -634,7 +634,7 @@ class Network(object):
 
     # genes
     filename = inst_path + 'genes.tsv'
-    f = open(filename, 'r')
+    f = open(filename, 'r', encoding='utf-8')
     lines = f.readlines()
     f.close()
 
@@ -687,7 +687,7 @@ class Network(object):
 
     # barcodes
     filename = inst_path + 'barcodes.tsv'
-    f = open(filename, 'r')
+    f = open(filename, 'r', encoding='utf-8')
     lines = f.readlines()
     f.close()
 
@@ -808,13 +808,13 @@ class Network(object):
 
           inst_auc = auc(fpr, tpr)
 
-          if plot_roc:
-              plt.figure()
-              plt.plot(fpr, tpr)
-              plt.plot([0, 1], [0, 1], color='navy', linestyle='--')
-              plt.figure(figsize=(10,10))
+          # if plot_roc:
+          #     plt.figure()
+          #     plt.plot(fpr, tpr)
+          #     plt.plot([0, 1], [0, 1], color='navy', linestyle='--')
+          #     plt.figure(figsize=(10,10))
 
-              print('AUC', inst_auc)
+          #     print('AUC', inst_auc)
 
           roc_data['true'] = y_true
           roc_data['score'] = y_score
@@ -1244,15 +1244,15 @@ class Network(object):
       from scipy import stats
       import pandas as pd
 
-      import matplotlib.pyplot as plt
+      # import matplotlib.pyplot as plt
       # %matplotlib inline
 
       if columns == False:
           columns = df.columns.tolist()
 
-      plt.figure(figsize=figsize)
-      figure_title = start_title + ' ' + group + ' ' + end_title
-      plt.suptitle(figure_title, fontsize=20)
+      # plt.figure(figsize=figsize)
+      # figure_title = start_title + ' ' + group + ' ' + end_title
+      # plt.suptitle(figure_title, fontsize=20)
 
       # list of arranged dataframes
       dfs = {}
@@ -1288,33 +1288,33 @@ class Network(object):
               np.random.seed(rand_seed)
               xs.append(np.random.normal(i+1, 0.04, subdf.shape[0]))
 
-          ax = plt.subplot(num_row, num_col, plot_id)
+          # ax = plt.subplot(num_row, num_col, plot_id)
 
-          plt.boxplot(vals, labels=names)
+          # # plt.boxplot(vals, labels=names)
 
-          ngroup = len(vals)
+          # ngroup = len(vals)
 
-          clevels = np.linspace(0., 1., ngroup)
+          # clevels = np.linspace(0., 1., ngroup)
 
-          for x, val, clevel in zip(xs, vals, clevels):
+          # for x, val, clevel in zip(xs, vals, clevels):
 
-              plt.subplot(num_row, num_col, plot_id)
-              plt.scatter(x, val, c=dot_color, alpha=alpha)
+          #     plt.subplot(num_row, num_col, plot_id)
+          #     plt.scatter(x, val, c=dot_color, alpha=alpha)
 
 
-          df_arranged = pd.concat(vals, axis=1)
+          # df_arranged = pd.concat(vals, axis=1)
 
-          # anova
-          anova_data = [df_arranged[col].dropna() for col in df_arranged]
-          f_val, pval = stats.f_oneway(*anova_data)
+          # # anova
+          # anova_data = [df_arranged[col].dropna() for col in df_arranged]
+          # f_val, pval = stats.f_oneway(*anova_data)
 
-          if pval < 0.01:
-              ax.set_title(column_title + ' P-val: ' + '{:.2e}'.format(pval))
-          else:
-              pval = round(pval * 100000)/100000
-              ax.set_title(column_title + ' P-val: ' + str(pval))
+          # if pval < 0.01:
+          #     ax.set_title(column_title + ' P-val: ' + '{:.2e}'.format(pval))
+          # else:
+          #     pval = round(pval * 100000)/100000
+          #     ax.set_title(column_title + ' P-val: ' + str(pval))
 
-          dfs[column] = df_arranged
+          # dfs[column] = df_arranged
 
       return dfs
 

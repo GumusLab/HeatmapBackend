@@ -90,7 +90,7 @@ def make_cluster(data=None, assay_type='None', val_scale='Zscore', results_file=
         
         print("Data loaded successfully.")
     except Exception as e:
-        print(f"❌ An error occurred while loading data: {e}")
+        print(f"An error occurred while loading data: {e}")
         return {"error": str(e)}
     
     if val_scale == 'Zscore':
@@ -109,9 +109,9 @@ def make_cluster(data=None, assay_type='None', val_scale='Zscore', results_file=
             imputation_method=imputation_method,  # Pass the selected method
             **imputation_kwargs  # Pass all strategy-specific parameters
         )
-        print("✅ Clustering completed successfully")
+        print("Clustering completed successfully")
     except Exception as e:
-        print(f"❌ Error during clustering: {e}")
+        print(f"Error during clustering: {e}")
         import traceback
         traceback.print_exc()
         return {"error": str(e)}

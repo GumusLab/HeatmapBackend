@@ -1,5 +1,6 @@
 def viz_json(net, dendro=True, links=False):
   ''' make the dictionary for the clustergram.js visualization '''
+  print(f"🔍 DEBUG viz_json: Starting visualization creation")
   from . import calc_clust
   import numpy as np
 
@@ -16,7 +17,6 @@ def viz_json(net, dendro=True, links=False):
 
     inst_keys = net.dat['node_info'][inst_rc]
     all_cats = [x for x in inst_keys if 'cat-' in x]
-
     for i in range(len(net.dat['nodes'][inst_rc])):
       # print(net.dat['nodes'][inst_rc])
       inst_dict = {}
@@ -41,9 +41,14 @@ def viz_json(net, dendro=True, links=False):
             inst_dict[tmp_pval_name] = net.dat['node_info'][inst_rc][check_pval][actual_cat_name]
 
           tmp_index_name = inst_name_cat.replace('-', '_') + '_index'
-
-          inst_dict[tmp_index_name] = net.dat['node_info'][inst_rc] \
-              [tmp_index_name][i]
+          
+        
+          if tmp_index_name in net.dat['node_info'][inst_rc]:
+            inst_dict[tmp_index_name] = net.dat['node_info'][inst_rc][tmp_index_name][i]
+          else:
+            if i == 0:  # Only print warning once
+              print(f"🔍 DEBUG viz_json: WARNING - {tmp_index_name} not found, skipping")
+            # Don't add this to inst_dict if it doesn't exist
 
 
       if len(net.dat['node_info'][inst_rc]['value']) > 0:

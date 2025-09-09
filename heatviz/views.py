@@ -1,50 +1,77 @@
+# from collections import defaultdict
+# import math
+# import os
+# import random
+# import uuid
+# import traceback
+# import logging
+# from rest_framework.decorators import api_view, parser_classes
+# from rest_framework.parsers import MultiPartParser
+# from rest_framework.response import Response
+# from rest_framework import status
+# from ollama import Client as OllamaClient  # ✅ Import Ollama Client
+# from django.http import HttpResponse, JsonResponse
+# from heatviz.clustergrammer2.make_clustergrammer import make_cluster
+# import json
+# import pandas as pd
+# import copy
+# import json
+# import requests
+# import numpy as np
+# from scipy.stats import pearsonr
+# from itertools import combinations
+# import os
+# import multiprocessing as mp
+# import threading # For simulating an asynchronous task
+# from typing import List, Dict, Any
+# import os
+# import traceback
+# import concurrent.futures
+# from .services.pathway_system import (
+#     initialize_pathway_database,
+#     get_pathway_genes,
+#     search_pathways_by_category,
+#     get_functional_genes,
+#     validate_pathway_command
+# )
+
+# # Import your existing functions
+# # from .your_existing_modules import filter_genes_by_ids, apply_filters, UPLOAD_DIR
+
+# # Import the ultra-optimized correlation engine
+# from .correlation_engine import (
+#     compute_correlation_matrix,
+#     estimate_correlation_job_time,
+#     get_correlation_data_size_estimate
+# )
+
 from collections import defaultdict
-import math
-import os
-import random
-import uuid
+import math, os, random, uuid, logging, threading, copy, json
+from typing import List, Dict, Any
 import traceback
-import logging
+
+from django.http import HttpResponse, JsonResponse
 from rest_framework.decorators import api_view, parser_classes
 from rest_framework.parsers import MultiPartParser
 from rest_framework.response import Response
 from rest_framework import status
-from ollama import Client as OllamaClient  # ✅ Import Ollama Client
-from django.http import HttpResponse, JsonResponse
+
+# Optional: you can also lazy-import this inside the functions that call it
 from heatviz.clustergrammer2.make_clustergrammer import make_cluster
-import json
-import pandas as pd
-import copy
-import json
-import requests
-import numpy as np
-from scipy.stats import pearsonr
-from itertools import combinations
-import os
-import multiprocessing as mp
-import threading # For simulating an asynchronous task
-from typing import List, Dict, Any
-import os
-import pandas as pd
-import traceback
-import concurrent.futures
+
 from .services.pathway_system import (
-    initialize_pathway_database,
     get_pathway_genes,
     search_pathways_by_category,
     get_functional_genes,
     validate_pathway_command
 )
 
-# Import your existing functions
-# from .your_existing_modules import filter_genes_by_ids, apply_filters, UPLOAD_DIR
-
-# Import the ultra-optimized correlation engine
 from .correlation_engine import (
     compute_correlation_matrix,
     estimate_correlation_job_time,
     get_correlation_data_size_estimate
 )
+
 
 # Set up logger
 logger = logging.getLogger('heatviz')
@@ -403,7 +430,6 @@ def _generate_and_store_3d_coords_task(session_id: str, heatmap_data: dict, radi
         for gene, cid in cluster_assignments.items():
             clusters_map.setdefault(cid, []).append(gene)
         clusters = [{"id": cid, "nodes": genes} for cid, genes in clusters_map.items()]
-        logger.info(f"Found {len(clusters)} clusters")
 
         # Step 1: Position cluster centers on sphere
         cluster_centers = position_clusters_on_sphere(clusters, radius)
@@ -414,7 +440,6 @@ def _generate_and_store_3d_coords_task(session_id: str, heatmap_data: dict, radi
         try:
             # Use the same gene names that were used for clustering (from row_nodes)
             clustered_gene_names = list(cluster_assignments.keys())
-            logger.info(f"Using {len(clustered_gene_names)} clustered gene names for correlation")
             
             # Load the full dataset for correlation computation
             file_path = os.path.join(UPLOAD_DIR, f"{session_id}.tsv")
@@ -433,23 +458,13 @@ def _generate_and_store_3d_coords_task(session_id: str, heatmap_data: dict, radi
                 
                 # Detect where the numeric data matrix starts (exclude metadata rows/columns)
                 matrix_start_row, matrix_start_col = detect_matrix_start(df)
-                logger.info(f"🔍 MATRIX DETECTION:")
-                logger.info(f"   Matrix starts at row={matrix_start_row}, col={matrix_start_col}")
-                logger.info(f"   Original DataFrame shape: {df.shape}")
-                
                 # Extract only the numeric data matrix (excluding metadata)
                 numeric_df = df.iloc[matrix_start_row:, matrix_start_col:]
-                logger.info(f"   Numeric matrix shape: {numeric_df.shape}")
-                logger.info(f"   Numeric matrix index (first 10): {numeric_df.index.tolist()[:10]}")
-                
                 # Convert to numeric, handling any remaining non-numeric values
                 numeric_df = numeric_df.apply(pd.to_numeric, errors='coerce')
-                logger.info(f"   After numeric conversion: {numeric_df.shape}")
                 
                 # Update the DataFrame to use the numeric matrix
-                df = numeric_df
-                logger.info(f"   Updated DataFrame shape: {df.shape}")
-                
+                df = numeric_df                
                 # Filter to only genes that exist in both datasets
                 # Handle duplicate gene names: map clustered names (with _dup suffixes) to raw names
                 clustered_to_raw_mapping = {}
@@ -464,44 +479,27 @@ def _generate_and_store_3d_coords_task(session_id: str, heatmap_data: dict, radi
                         clustered_to_raw_mapping[clustered_gene] = raw_gene
                 
                 available_genes = list(clustered_to_raw_mapping.keys())
-                logger.info(f"🔍 UPDATED GENE MAPPING:")
-                logger.info(f"   Found {len(available_genes)} genes common to clustering and numeric matrix")
-                logger.info(f"   Gene mapping examples: {list(clustered_to_raw_mapping.items())[:5]}")
-                logger.info(f"   Sample available genes: {available_genes[:10]}")
                 
                 if len(available_genes) > 5:  # Lower minimum genes for correlation
                     # Filter dataframe using the raw gene names (without _dup suffixes)
                     raw_genes_to_use = [clustered_to_raw_mapping[gene] for gene in available_genes]
                     
-                    logger.info(f"🔍 BEFORE FILTERING DEBUG:")
-                    logger.info(f"   available_genes length: {len(available_genes)}")
-                    logger.info(f"   raw_genes_to_use length: {len(raw_genes_to_use)}")
-                    logger.info(f"   df.shape: {df.shape}")
-                    logger.info(f"   df.index length: {len(df.index)}")
-                    logger.info(f"   First 5 raw_genes_to_use: {raw_genes_to_use[:5]}")
-                    logger.info(f"   First 5 available_genes: {available_genes[:5]}")
-                    
                     # Check for duplicates in raw_genes_to_use
                     raw_genes_unique = list(set(raw_genes_to_use))
-                    logger.info(f"   raw_genes_to_use unique length: {len(raw_genes_unique)}")
                     if len(raw_genes_unique) != len(raw_genes_to_use):
-                        logger.warning(f"   ⚠️ DUPLICATES in raw_genes_to_use!")
                         from collections import Counter
                         duplicates = [gene for gene, count in Counter(raw_genes_to_use).items() if count > 1]
-                        logger.warning(f"   Duplicate genes: {duplicates[:10]}")
+                        logger.warning(f"   Duplicate genes found in raw_genes_to_use")
                     
                     # Check for duplicates in DataFrame index
                     df_index_unique = len(set(df.index))
-                    logger.info(f"   df.index unique length: {df_index_unique}")
                     if df_index_unique != len(df.index):
-                        logger.warning(f"   ⚠️ DUPLICATES in df.index!")
+                        logger.warning(f"   WARNING: DUPLICATES in df.index!")
                         df_duplicates = df.index[df.index.duplicated()].tolist()
-                        logger.warning(f"   Duplicate df index values: {df_duplicates[:10]}")
                     
                     try:
                         # Handle duplicates properly: use unique genes for correlation
                         if len(raw_genes_unique) != len(raw_genes_to_use):
-                            logger.info(f"🔧 HANDLING DUPLICATES: Using {len(raw_genes_unique)} unique genes for correlation")
                             
                             # Create mapping from unique raw genes to clustered genes
                             unique_to_clustered = {}
@@ -511,7 +509,7 @@ def _generate_and_store_3d_coords_task(session_id: str, heatmap_data: dict, radi
                                     unique_to_clustered[raw_gene] = []
                                 unique_to_clustered[raw_gene].append(clustered_gene)
                             
-                            logger.info(f"   unique_to_clustered mapping examples: {list(unique_to_clustered.items())[:5]}")
+                            # logger.info(f"   unique_to_clustered mapping examples: {list(unique_to_clustered.items())[:5]}")
                             
                             # Build DataFrame with unique genes only
                             # We need to handle the case where df.index also has duplicates
@@ -540,44 +538,25 @@ def _generate_and_store_3d_coords_task(session_id: str, heatmap_data: dict, radi
                                                      index=unique_clustered_names,
                                                      columns=df.columns)
                             
-                            logger.info(f"   df_filtered.shape with unique genes: {df_filtered.shape}")
-                            logger.info(f"   unique_clustered_names length: {len(unique_clustered_names)}")
-                            logger.info(f"   Will expand correlation results to include duplicates later")
                             
                         else:
                             # No duplicates, proceed normally
                             df_filtered = df.loc[raw_genes_to_use]
                             df_filtered.index = available_genes
-                        
-                        logger.info(f"✅ DataFrame filtering successful")
-                        logger.info(f"   df_filtered.shape: {df_filtered.shape}")
-                        logger.info(f"   Expected shape: ({len(raw_genes_unique)}, {df.shape[1]})")
+                           
                     except Exception as filter_error:
-                        logger.error(f"❌ DataFrame filtering failed: {filter_error}")
-                        logger.error(f"   Error type: {type(filter_error)}")
-                        logger.error(f"   raw_genes_to_use that don't exist in df.index:")
                         missing_genes = [gene for gene in raw_genes_to_use if gene not in df.index]
                         logger.error(f"   Missing genes: {missing_genes[:10]} (showing first 10)")
                         raise filter_error
                     
 
                     
-                    logger.info(f"Filtered DataFrame shape: {df_filtered.shape}")
-                    logger.info(f"Filtered DataFrame sample values: {df_filtered.iloc[0, :5].tolist()}")
-                    
-                    # Check data quality for correlation engine
-                    logger.info(f"Data quality check:")
-                    logger.info(f"   NaN values: {df_filtered.isnull().sum().sum()}")
-                    logger.info(f"   Infinite values: {np.isinf(df_filtered.values).sum()}")
-                    logger.info(f"   Data type: {df_filtered.dtypes.iloc[0]}")
-                    logger.info(f"   Value range: {df_filtered.values.min():.3f} to {df_filtered.values.max():.3f}")
+                   
                     
                     # Check for constant genes (zero variance)
                     gene_variances = df_filtered.var(axis=1)
                     zero_var_genes = (gene_variances == 0).sum()
-                    logger.info(f"   Genes with zero variance: {zero_var_genes}")
-                    logger.info(f"   Sample variances: {gene_variances.head().tolist()}")
-                    
+                                        
                     # Use correlation engine with settings for strongest edges only
                     correlation_filters = {
                         'correlationThreshold': 0.1,  # Very low threshold to see any edges
@@ -587,33 +566,18 @@ def _generate_and_store_3d_coords_task(session_id: str, heatmap_data: dict, radi
                         'minSamples': 5               # Lower minimum samples
                     }
                     
-                    # Debug: Inspect the DataFrame being passed to correlation engine
-                    logger.info(f"🔍 CORRELATION INPUT DEBUG:")
-                    logger.info(f"   DataFrame shape: {df_filtered.shape}")
-                    logger.info(f"   DataFrame index (first 10): {df_filtered.index.tolist()[:10]}")
-                    logger.info(f"   DataFrame columns (first 5): {df_filtered.columns.tolist()[:5]}")
-                    logger.info(f"   DataFrame dtypes: {df_filtered.dtypes.unique()}")
-                    logger.info(f"   Sample data (first gene, first 5 samples):")
-                    logger.info(f"     {df_filtered.iloc[0, :5].tolist()}")
-                    logger.info(f"   Index type: {type(df_filtered.index)}")
-                    logger.info(f"   Any duplicate indices: {df_filtered.index.duplicated().any()}")
                     if df_filtered.index.duplicated().any():
                         duplicated_indices = df_filtered.index[df_filtered.index.duplicated()].tolist()
                         logger.info(f"   Duplicate indices: {duplicated_indices[:10]}")
                     
-                    logger.info(f"Calling correlation engine with filters: {correlation_filters}")
                     correlation_result = compute_correlation_matrix(df_filtered, correlation_filters)
-                    logger.info(f"Correlation result keys: {list(correlation_result.keys())}")
                     
                     if "correlations" in correlation_result:
                         correlation_edges = correlation_result["correlations"]
-                        logger.info(f"Found {len(correlation_edges)} strong correlation edges using clustered gene names")
                     else:
                         logger.warning("No correlations found, proceeding with cluster-only layout")
-                        logger.warning(f"Correlation result: {correlation_result}")
                         
                         # Try with even more lenient settings
-                        logger.info("Trying with ultra-lenient settings...")
                         ultra_lenient_filters = {
                             'correlationThreshold': 0.01,  # Almost any correlation
                             'pValueThreshold': 0.5,        # Very lenient p-value
@@ -623,16 +587,12 @@ def _generate_and_store_3d_coords_task(session_id: str, heatmap_data: dict, radi
                         }
                         logger.info(f"Ultra-lenient filters: {ultra_lenient_filters}")
                         ultra_result = compute_correlation_matrix(df_filtered, ultra_lenient_filters)
-                        logger.info(f"Ultra-lenient result keys: {list(ultra_result.keys())}")
                         if "correlations" in ultra_result:
                             correlation_edges = ultra_result["correlations"]
-                            logger.info(f"Ultra-lenient found {len(correlation_edges)} edges!")
                         else:
                             logger.warning(f"Even ultra-lenient failed: {ultra_result}")
                 else:
                     logger.warning(f"Too few common genes ({len(available_genes)}), proceeding with cluster-only layout")
-                    logger.warning(f"Clustered genes sample: {clustered_gene_names[:10]}")
-                    logger.warning(f"DataFrame index sample: {df.index.tolist()[:10]}")
             else:
                 logger.warning(f"Session file not found: {file_path}")
         except Exception as e:
@@ -692,7 +652,7 @@ def position_genes_with_correlation_refinement(clusters, cluster_centers, radius
         edge_lookup.setdefault(gene1, []).append((gene2, correlation))
         edge_lookup.setdefault(gene2, []).append((gene1, correlation))
     
-    logger.info(f"🔗 Built edge lookup with {len(correlation_edges)} edges")
+    logger.info(f"Built edge lookup with {len(correlation_edges)} edges")
     
     # Always prefer cluster-based layout to maintain cluster grouping
     # Only use global layout for very sparse networks with few clusters
@@ -717,11 +677,11 @@ def position_genes_with_correlation_refinement(clusters, cluster_centers, radius
                     G_global.add_edge(edge['gene1'], edge['gene2'], weight=abs(edge['correlation']))
                     strong_edges += 1
             
-            logger.info(f"🌐 Global network: {len(all_genes)} genes, {strong_edges} strong edges")
+            logger.info(f"Global network: {len(all_genes)} genes, {strong_edges} strong edges")
             
             if G_global.number_of_edges() > 0:
                 # Use 3D spring layout for the entire network
-                logger.info("🚀 Using global 3D spring layout with correlation influence")
+                logger.info("Using global 3D spring layout with correlation influence")
                 pos_global = nx.spring_layout(G_global, dim=3, k=radius*0.1, iterations=100, seed=42)
                 
                 # Scale positions to fit within sphere
@@ -746,14 +706,14 @@ def position_genes_with_correlation_refinement(clusters, cluster_centers, radius
                         
                         gene_positions[gene] = {"x": x * factor, "y": y * factor, "z": z * factor}
                 
-                logger.info(f"✅ Global layout positioned {len(gene_positions)} genes")
+                logger.info(f"Global layout positioned {len(gene_positions)} genes")
                 return gene_positions
                 
         except Exception as e:
             logger.warning(f"Global layout failed: {e}, falling back to cluster-based layout")
     
     # Fallback to cluster-based positioning with enhanced inter-cluster awareness
-    logger.info("🏘️ Using enhanced cluster-based positioning for better visual grouping")
+    logger.info("Using enhanced cluster-based positioning for better visual grouping")
     
     for cluster in clusters:
         cid = cluster["id"]
@@ -846,7 +806,7 @@ def position_genes_with_correlation_refinement(clusters, cluster_centers, radius
                     j, M, cx, cy, cz, base_cluster_radius, radius
                 )
     
-    logger.info(f"✅ Cluster-based layout positioned {len(gene_positions)} genes in {len(clusters)} clusters")
+    logger.info(f"Cluster-based layout positioned {len(gene_positions)} genes in {len(clusters)} clusters")
     return gene_positions
 
 
@@ -881,36 +841,108 @@ def _position_gene_in_cluster_fallback(j, M, cx, cy, cz, cluster_radius, main_ra
 @api_view(['POST'])
 @parser_classes([MultiPartParser])
 def process_data_view(request):
+    import time
+    import threading
+    import os
+    
+    # DEBUG: Log every single request that hits this endpoint
+    initial_timestamp = time.time()
+    initial_thread_id = threading.current_thread().ident  
+    initial_process_id = os.getpid()
+    
+    print('=' * 100)
+    print(f'🔍 INCOMING REQUEST to process_data_view')
+    print(f'   Timestamp: {initial_timestamp}')
+    print(f'   Human time: {time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(initial_timestamp))}')
+    print(f'   Process ID: {initial_process_id}')
+    print(f'   Thread ID: {initial_thread_id}')
+    print(f'   Request method: {request.method}')
+    print(f'   Content type: {request.content_type}')
+    print(f'   Request data keys: {list(request.data.keys())}')
+    print(f'   Request FILES keys: {list(request.FILES.keys())}')
+    print(f'   Client IP: {request.META.get("REMOTE_ADDR", "unknown")}')
+    print(f'   User Agent: {request.META.get("HTTP_USER_AGENT", "unknown")[:50]}...')
+    print('=' * 100)
+
+    print('************* request came *************************************')
+    
     # Check if this is a strategy selection request (second step)
     if 'session_id' in request.data and 'imputation_strategy' in request.data:
+        print('************* strategy selection request *************************************')
         return handle_strategy_processing(request)
     
     # Original file upload logic (first step)
     file = request.FILES.get('data')
     if not file:
+        print('************* No file provided *************************************')
         return Response({"error": "No file provided"}, status=status.HTTP_400_BAD_REQUEST)
+    
+    # DEBUG: Add comprehensive request tracing
+    import time
+    import threading
+    import hashlib
+    
+    request_timestamp = time.time()
+    thread_id = threading.current_thread().ident
+    process_id = os.getpid()
+    
+    # Calculate file hash for duplicate detection
+    file_content = file.read()
+    file.seek(0)  # Reset file pointer
+    file_hash = hashlib.md5(file_content).hexdigest()
+    file_size = len(file_content)
+    
+    print(f'🔍 DEBUG UPLOAD REQUEST:')
+    print(f'   Timestamp: {request_timestamp}')
+    print(f'   Process ID: {process_id}')
+    print(f'   Thread ID: {thread_id}')
+    print(f'   File size: {file_size} bytes')
+    print(f'   File hash: {file_hash}')
+    print(f'   Client IP: {request.META.get("REMOTE_ADDR", "unknown")}')
+    print(f'   User Agent: {request.META.get("HTTP_USER_AGENT", "unknown")[:100]}')
+    print(f'   Request Headers: {dict(request.headers)}')
+    print('*' * 80)
            
-    # Defensive: Ensure directory exists before writing
+        # Defensive: Ensure directory exists before writing
     if not os.path.exists(UPLOAD_DIR):
+        print('************* UPLOAD_DIR does not exist *************************************')
         os.makedirs(UPLOAD_DIR, exist_ok=True)
- 
+
     try:
         # Generate a unique session ID
+        print('🔍 DEBUG: Starting session ID generation')
         session_id = str(uuid.uuid4())
+        print(f'🔍 DEBUG: Generated session_id: {session_id}')
+        
         filename = f"{session_id}.tsv"
         file_path = os.path.join(UPLOAD_DIR, filename)
         metadata_file_path = os.path.join(UPLOAD_DIR, f"{session_id}_metadata.json")
-          
+        
+        print(f'🔍 DEBUG: File paths:')
+        print(f'   TSV: {file_path}')
+        print(f'   Metadata: {metadata_file_path}')
+        
+        # Check if files already exist (shouldn't happen with UUID4)
+        if os.path.exists(file_path):
+            print(f'🚨 WARNING: File already exists: {file_path}')
+        if os.path.exists(metadata_file_path):
+            print(f'🚨 WARNING: Metadata file already exists: {metadata_file_path}')
+        
         # Save the uploaded file permanently
+        print(f'🔍 DEBUG: Starting file write to {file_path}')
+        file_write_start = time.time()
+        
         with open(file_path, 'wb+') as destination:
             for chunk in file.chunks():
                 destination.write(chunk)
- 
-        print(f"✅ File saved: {file_path}")
+        
+        file_write_end = time.time()
+        print(f'🔍 DEBUG: File write completed in {file_write_end - file_write_start:.3f}s')
+        print(f'🔍 DEBUG: File saved: {file_path} (size: {os.path.getsize(file_path)} bytes)')
           
         # 📚 Extract and Save Metadata JSON
         extract_and_save_metadata(tsv_file_path=file_path, metadata_json_path=metadata_file_path)
-        print(f"✅ Metadata saved: {metadata_file_path}")
+        print(f"Metadata saved: {metadata_file_path}")
           
         # NEW: Check for missing values before processing
         missing_analysis = analyze_missing_values(file_path)
@@ -918,7 +950,7 @@ def process_data_view(request):
         
         if missing_analysis['has_missing_values']:
             # Missing values detected - return analysis and available strategies
-            print(f"⚠️ Missing values detected: {missing_analysis['missing_percentage']:.2f}%")
+            print(f"WARNING: Missing values detected: {missing_analysis['missing_percentage']:.2f}%")
             
             return JsonResponse({
                 "session_id": session_id,
@@ -928,37 +960,76 @@ def process_data_view(request):
             }, status=200)
         else:
             # No missing values - proceed with normal processing (default imputation)
-            print("✅ No missing values detected, proceeding with clustering")
+            print("No missing values detected, proceeding with clustering")
             response_data = make_cluster(
                 data=file_path,
                 imputation_method='auto'  # Default when no missing values
             )
 
+            # Handle response_data which can be either JSON string (success) or dict (error)
+            if isinstance(response_data, str):
+                # Success case: response_data is JSON string
+                heatmap_data = json.loads(response_data)
+            elif isinstance(response_data, dict):
+                # Error case: response_data is already a dict
+                if "error" in response_data:
+                    # Handle the error case
+                    logger.error(f"Error from make_cluster: {response_data['error']}")
+                    return JsonResponse({"error": response_data["error"]}, status=500)
+                else:
+                    # It's a dict but not an error (shouldn't happen, but handle it)
+                    heatmap_data = response_data
+            else:
+                raise TypeError(f"Unexpected response_data type: {type(response_data)}")
+
                     # --- Trigger Asynchronous Global 3D Layout Generation ---
+            # DISABLED: 3D coordinate generation to reduce server strain
             # Set initial task status
-            task_status_cache[session_id] = {'status': 'pending', 'message': '3D layout generation queued.'}
-            heatmap_data = json.loads(response_data)
-            _run_async_task_in_background(
-                _generate_and_store_3d_coords_task,
-                session_id,
-                heatmap_data, # Pass the entire heatmap_data to the async task
-                HEMISPHERE_LAYOUT_RADIUS
-            )
-            logger.info(f"Triggered async 3D coordinate generation for session: {session_id}")
+            task_status_cache[session_id] = {'status': 'disabled', 'message': '3D layout generation disabled to reduce server load.'}
+            # _run_async_task_in_background(
+            #     _generate_and_store_3d_coords_task,
+            #     session_id,
+            #     heatmap_data, # Pass the entire heatmap_data to the async task
+            #     HEMISPHERE_LAYOUT_RADIUS
+            # )
+            logger.info(f"3D coordinate generation disabled for session: {session_id}")
 
 
+            # DEBUG: Log successful completion
+            request_end_time = time.time()
+            total_processing_time = request_end_time - request_timestamp
+            
+            print(f'🔍 DEBUG: Request completed successfully')
+            print(f'   Total processing time: {total_processing_time:.3f}s')
+            print(f'   Session ID: {session_id}')
+            print(f'   Files created: {file_path}, {metadata_file_path}')
+            print('=' * 80)
                         
             return JsonResponse({
                 "session_id": session_id,
                 "has_missing_values": False,
-                "heatmap_data": json.loads(response_data),
-                "global_3d_positions_status": task_status_cache[session_id]['status'] # Return initial status
+                "heatmap_data": heatmap_data,  # Use the already parsed heatmap_data
+                # "global_3d_positions_status": task_status_cache[session_id]['status'] # Return initial status
+                "global_3d_positions_status": "disabled" # 3D coordinates disabled
+
 
             }, status=200)
          
     except Exception as e:
         error_trace = traceback.format_exc()
-        logger.error(f"❌ Error processing file: {str(e)}\n{error_trace}")
+        
+        # DEBUG: Log error completion
+        request_end_time = time.time()
+        total_processing_time = request_end_time - request_timestamp
+        
+        print(f'🚨 DEBUG: Request failed with error')
+        print(f'   Total processing time: {total_processing_time:.3f}s')
+        print(f'   Error: {str(e)}')
+        print(f'   Process ID: {process_id}')
+        print(f'   Thread ID: {thread_id}')
+        print('=' * 80)
+        
+        logger.error(f"Error processing file: {str(e)}\n{error_trace}")
         return JsonResponse({
             "error": str(e),
             "traceback": error_trace
@@ -988,7 +1059,7 @@ def get_3d_coords_view(request, session_id: str):
             coordinates = global_3d_positions.get('coordinates', {})
             cluster_info = global_3d_positions.get('cluster_info', {})
             
-            logger.info(f"📊 3D Data Summary for session {session_id}:")
+            logger.info(f"3D Data Summary for session {session_id}:")
             logger.info(f"   - Coordinates: {len(coordinates)} genes")
             logger.info(f"   - Correlation edges: {len(correlation_edges)} edges")
             logger.info(f"   - Clusters: {len(cluster_info.get('clusters', []))} clusters")
@@ -1053,8 +1124,8 @@ def handle_strategy_processing(request):
             else:
                 imputation_kwargs = strategy_params
         
-        print(f"🔧 Processing with {strategy} imputation strategy")
-        print(f"📋 Parameters: {imputation_kwargs}")
+        print(f"Processing with {strategy} imputation strategy")
+        print(f"Parameters: {imputation_kwargs}")
         
         # Reconstruct file path
         filename = f"{session_id}.tsv"
@@ -1084,7 +1155,7 @@ def handle_strategy_processing(request):
         
     except Exception as e:
         error_trace = traceback.format_exc()
-        logger.error(f"❌ Error processing with strategy: {str(e)}\n{error_trace}")
+        logger.error(f"Error processing with strategy: {str(e)}\n{error_trace}")
         return JsonResponse({
             "error": str(e),
             "traceback": error_trace
@@ -1093,18 +1164,21 @@ def handle_strategy_processing(request):
 
 def analyze_missing_values(file_path):
     """Analyze missing values in the uploaded file - FIXED to only analyze numeric matrix"""
+    import pandas as pd
+    import numpy as np
+
     try:
         # Read the entire file first
         df = pd.read_csv(file_path, sep='\t', header=None)  # Read without assuming structure
-        print(f"🔍 Full file shape: {df.shape}")
+        print(f"Full file shape: {df.shape}")
         
         # Detect where the numeric matrix starts
         matrix_start_row, matrix_start_col = detect_matrix_start(df)
-        print(f"🔍 Matrix starts at row={matrix_start_row}, col={matrix_start_col}")
+        print(f"Matrix starts at row={matrix_start_row}, col={matrix_start_col}")
         
         # Extract only the numeric data matrix portion
         numeric_matrix = df.iloc[matrix_start_row:, matrix_start_col:]
-        print(f"🔍 Numeric matrix shape: {numeric_matrix.shape}")
+        print(f"Numeric matrix shape: {numeric_matrix.shape}")
         
         # Convert to numpy array for analysis, handling non-numeric values
         try:
@@ -1128,7 +1202,7 @@ def analyze_missing_values(file_path):
                             # Leave as NaN if conversion fails
                             data[i, j] = np.nan
         
-        print(f"🔍 Final data matrix shape: {data.shape}")
+        print(f"Final data matrix shape: {data.shape}")
         
         # Calculate missing value statistics on the numeric matrix only
         missing_mask = np.isnan(data)
@@ -1142,7 +1216,7 @@ def analyze_missing_values(file_path):
         genes_missing_percentage = (np.sum(missing_mask, axis=1) / data.shape[1]) * 100
         samples_missing_percentage = (np.sum(missing_mask, axis=0) / data.shape[0]) * 100
         
-        print(f"🔍 Missing value analysis:")
+        print(f"Missing value analysis:")
         print(f"   Total missing: {total_missing}")
         print(f"   Missing percentage: {missing_percentage:.2f}%")
         print(f"   Genes with missing: {genes_with_missing}")
@@ -1238,7 +1312,8 @@ def validate_command_values(action, target, value, df, metadata=None):
     """
     Validate if the requested values exist in the dataset
     Returns (is_valid, error_message)
-    """    
+    """   
+    import pandas as pd
     if action == "sample_filter":
         # Check if the metadata field exists and has the requested value
         if metadata and 'col' in metadata:
@@ -1310,6 +1385,9 @@ def validate_command_values(action, target, value, df, metadata=None):
 # Replace the section after "Extract data from response" with this:
 @api_view(['POST'])
 def command_execution(request):
+    import pandas as pd
+    import json
+    import requests
     try:
         session_id = request.data.get('session_id')
         command = request.data.get('command')
@@ -1484,7 +1562,7 @@ def command_execution(request):
                 "updated_filters": filters, # Send back original filters
                 "commandHistory": command_history + [command]                
             }
-        if action in PATHWAY_ACTIONS:
+        elif action in PATHWAY_ACTIONS:
             is_pathway_valid, pathway_error = validate_pathway_command(action, target, value)
             if not is_pathway_valid:
                 return Response({
@@ -1666,17 +1744,16 @@ def command_execution(request):
                             "error": f"Error searching pathways: {str(e)}",
                             "commandHistory": command_history + [command]
                         }
-        else:
+        elif action not in VIEW_ONLY_ACTIONS and action not in PATHWAY_ACTIONS:
             # --- This is a "Data Subsetting" command ---
             # This is your original logic for filtering and re-clustering
             print(f"Action '{action}' requires data re-processing on the backend.")
             updated_filters = update_filters(filters, action, target, value)
-            final_df = apply_filters(df, updated_filters)
+            final_df = apply_filters(df, updated_filters, session_id)
             final_df.columns = ['' if 'unnamed' in str(col).lower() else str(col) for col in final_df.columns]
 
             if final_df is not None and not final_df.empty:
                 clustering_result_str = make_cluster(final_df)
-                print(clustering_result_str)
                 clustering_result = json.loads(clustering_result_str)
                 
                 response_data = {
@@ -1702,6 +1779,8 @@ def command_execution(request):
 
     
 def filter_genes_by_ids(df, gene_ids):
+    import pandas as pd
+
     """
     Filter DataFrame to only include rows that match the provided gene IDs.
     Looks for gene IDs in the first few columns (gene names/identifiers).
@@ -1769,6 +1848,8 @@ All existing functionality is preserved with 10-20x performance improvement.
 
 @api_view(['POST'])
 def correlation_network(request):
+    import pandas as pd
+
     """
     Ultra-optimized correlation network function.
     
@@ -1827,7 +1908,7 @@ def correlation_network(request):
         
         # ✅ Apply additional filters using your existing function (UNCHANGED)
         if filters:
-            final_df = apply_filters(filtered_gene_df, filters)
+            final_df = apply_filters(filtered_gene_df, filters, session_id)
             print(f"After applying filters shape: {final_df.shape}")
         else:
             final_df = filtered_gene_df
@@ -1847,7 +1928,7 @@ def correlation_network(request):
         optimized_filters = {
             'correlationThreshold': filters.get('correlationThreshold', 0.7),  # More realistic default
             'pValueThreshold': filters.get('pValueThreshold', 0.05),           # Less strict default
-            'maxCorrelations': filters.get('maxCorrelations', 100000),
+            'maxCorrelations': filters.get('maxCorrelations', 20000),
             'variancePercentile': filters.get('variancePercentile', 0.2),     # Keep top 80%
             'minSamples': filters.get('minSamples', 10),
             **filters  # Preserve any additional filters
@@ -2217,6 +2298,8 @@ def recommend_correlation_parameters(request):
 
 @api_view(['POST'])
 def refresh_heatmap(request):
+    import pandas as pd
+
     """
     Basic correlation network function that accepts arguments and prints them.
     Will be expanded with actual correlation computation later.
@@ -2242,7 +2325,7 @@ def refresh_heatmap(request):
         
         # ✅ Apply additional filters using your existing function
         if filters:
-            final_df = apply_filters(df, filters)
+            final_df = apply_filters(df, filters, session_id)
             print(f"After applying filters shape: {final_df.shape}")
         else:
             final_df = df
@@ -2304,6 +2387,9 @@ def fetch_single_library(user_list_id, library):
 # ✅ The view is now a standard synchronous "def"
 @api_view(['POST'])
 def enrich_analysis_view(request):
+    import requests
+    import concurrent.futures
+
     genes = request.data.get('genes', [])
     if not isinstance(genes, list) or not genes:
         return Response({"error": "A non-empty list of 'genes' is required."}, status=status.HTTP_400_BAD_REQUEST)
@@ -2962,8 +3048,9 @@ Start immediately with '{{'.
     
     return prompt
     
-def detect_matrix_start(df: pd.DataFrame) -> tuple:
+def detect_matrix_start(df) -> tuple:
     """Dynamically detect where the numeric data matrix starts."""
+    import pandas as pd
     matrix_start_row = None
     matrix_start_col = None
     
@@ -3035,7 +3122,12 @@ def detect_matrix_start(df: pd.DataFrame) -> tuple:
     print(f"Detected matrix start: row={matrix_start_row}, col={matrix_start_col}")
     return matrix_start_row, matrix_start_col
 
-def apply_filters(df: pd.DataFrame, filters: dict) -> pd.DataFrame:
+# def apply_filters(df: pd.DataFrame, filters: dict) -> pd.DataFrame:
+def apply_filters(df, filters,session_id=None):
+
+    import pandas as pd
+    import numpy as np
+
     try:
         print("📢 apply_filters called!")
         print('******** filter is as follows ******', filters)
@@ -3094,7 +3186,7 @@ def apply_filters(df: pd.DataFrame, filters: dict) -> pd.DataFrame:
                     print(f"⚠️ Missing field/value in gene_filter: {f}")
                     continue
 
-                print(f"🔍 Looking for rows with metadata '{field}:{value}'")
+                print(f"Looking for rows with metadata '{field}:{value}'")
                 field_lower = field.lower()
                 value_lower = value.lower()
 
@@ -3423,6 +3515,8 @@ def is_number(value):
 
 def extract_and_save_metadata(tsv_file_path: str, metadata_json_path: str):
     """Extract distinct metadata values for each category from a TSV file and save as JSON."""
+    import pandas as pd
+
     # Read the TSV file
     print(f"Reading TSV file: {tsv_file_path}")
     df = pd.read_csv(tsv_file_path, sep="\t", header=None)
@@ -3539,6 +3633,6 @@ def extract_and_save_metadata(tsv_file_path: str, metadata_json_path: str):
     with open(metadata_json_path, "w") as f:
         json.dump(metadata, f, indent=4)
     
-    print(f"✅ Metadata saved at: {metadata_json_path}")
+    print(f"Metadata saved at: {metadata_json_path}")
     return metadata
 

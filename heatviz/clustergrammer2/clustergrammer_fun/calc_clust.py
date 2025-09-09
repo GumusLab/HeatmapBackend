@@ -580,56 +580,32 @@ def cluster_row_and_col(net, dist_type='cosine', linkage_type='average',
     
     # Pre-process matrix once to avoid repeated deep copies
     base_mat = np.array(net.dat['mat'], dtype=np.float64)
-
-    print('********* BEFORE IMPUTATION **********')
-    print(f'base_mat shape: {base_mat.shape}')
-    print(f'base_mat rows: {base_mat.shape[0]}')
-    print(f'base_mat cols: {base_mat.shape[1]}')
-    print(f'net.dat row_nodes length: {len(net.dat["node_info"]["row"])}')
-    print(f'net.dat col_nodes length: {len(net.dat["node_info"]["col"])}')
-    
     # Check for any NaN values before imputation
     nan_count = np.isnan(base_mat).sum()
-    print(f'NaN values before imputation: {nan_count}')
     if nan_count > 0:
         nan_rows = np.isnan(base_mat).any(axis=1).sum()
         nan_cols = np.isnan(base_mat).any(axis=0).sum()
         print(f'Rows with NaN: {nan_rows}')
         print(f'Cols with NaN: {nan_cols}')
 
-    print('********* base mat shape before imputation is as follows **********', base_mat.shape)
     # base_mat = _preprocess_matrix(base_mat)
     base_mat = _preprocess_matrix(base_mat, imputation_method, **imputation_kwargs)
 
-    print('********* AFTER IMPUTATION **********')
-    print(f'base_mat shape: {base_mat.shape}')
-    print(f'base_mat rows: {base_mat.shape[0]}')
-    print(f'base_mat cols: {base_mat.shape[1]}')
     
     # Check if shapes match the node info
-    expected_rows = len(net.dat["node_info"]["row"])
-    expected_cols = len(net.dat["node_info"]["col"])
+    expected_rows = len(net.dat["node_info"]["row"]["full_names"])
+    expected_cols = len(net.dat["node_info"]["col"]["full_names"])
     
-    print(f'Expected rows (from node_info): {expected_rows}')
-    print(f'Expected cols (from node_info): {expected_cols}')
     
     if base_mat.shape[0] != expected_rows:
-        print(f'❌ ROW MISMATCH: Matrix has {base_mat.shape[0]} rows but node_info has {expected_rows}')
+        print(f'ROW MISMATCH: Matrix has {base_mat.shape[0]} rows but node_info has {expected_rows}')
     else:
-        print(f'✅ Row count matches')
+        print(f'Row count matches')
         
     if base_mat.shape[1] != expected_cols:
-        print(f'❌ COL MISMATCH: Matrix has {base_mat.shape[1]} cols but node_info has {expected_cols}')
+        print(f'COL MISMATCH: Matrix has {base_mat.shape[1]} cols but node_info has {expected_cols}')
     else:
-        print(f'✅ Column count matches')
-    
-    # Check for any remaining NaN values after imputation
-    nan_count_after = np.isnan(base_mat).sum()
-    print(f'NaN values after imputation: {nan_count_after}')
-    
-    print('******************************************')
-
-
+        print(f'Column count matches')
     
     # Smart caching decision based on matrix size
     use_caching = _should_cache_distances(base_mat, max_cache_size_mb)
@@ -687,7 +663,27 @@ def cluster_row_and_col(net, dist_type='cosine', linkage_type='average',
         # Category calculations
         if not ignore_cat:
             try:
-                categories.calc_cat_clust_order(net, axis)
+                # Check if this axis has meaningful categories before processing
+                inst_keys = net.dat['node_info'][axis]
+                all_cats = [x for x in inst_keys if 'cat-' in x]
+                
+                has_meaningful_cats = False
+                for cat_name in all_cats:
+                    dict_name = 'dict_' + cat_name.replace('-', '_')
+                    if dict_name in inst_keys:
+                        dict_cat = inst_keys[dict_name]
+                        if isinstance(dict_cat, dict):
+                            # Check if all categories are NaN
+                            nan_count = sum(1 for cat in dict_cat.keys() if str(cat) == 'nan')
+                            if nan_count < len(dict_cat):
+                                has_meaningful_cats = True
+                                break
+                
+                if has_meaningful_cats:
+                    categories.calc_cat_clust_order(net, axis)
+                else:
+                    print(f"🔍 DEBUG: Skipping category processing for {axis} - all categories are NaN")
+                    
             except Exception as e:
                 print(f"⚠️ Error in calc_cat_clust_order: {e}")
     

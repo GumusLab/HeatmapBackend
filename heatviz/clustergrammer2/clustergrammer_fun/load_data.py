@@ -18,7 +18,7 @@ def load_file(net, filename):
 
   net.reset()
 
-  f = open(filename, 'r')
+  f = open(filename, 'r', encoding='utf-8')
 
   file_string = f.read()
   f.close()
@@ -261,13 +261,13 @@ def debug_categories_check_categories(lines):
 
 
 def load_json_to_dict(filename):
-  f = open(filename, 'r')
+  f = open(filename, 'r', encoding='utf-8')
   inst_dict = json.load(f)
   f.close()
   return inst_dict
 
 def load_gmt(filename):
-  f = open(filename, 'r')
+  f = open(filename, 'r', encoding='utf-8')
   lines = f.readlines()
   f.close()
   gmt = {}
