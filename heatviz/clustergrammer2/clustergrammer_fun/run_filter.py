@@ -2,14 +2,18 @@ def df_filter_row_sum(df, threshold, take_abs=True):
   ''' filter rows in matrix at some threshold
   and remove columns that have a sum below this threshold '''
 
-  from copy import deepcopy
-  from .__init__ import Network
-  net = Network()
+  # NOTE: deepcopy replaced with pandas copy() for optimization
+  # Uncomment below if issues arise:
+  # from copy import deepcopy
+  # if take_abs is True:
+  #   df_copy = deepcopy(df.abs())
+  # else:
+  #   df_copy = deepcopy(df)
 
   if take_abs is True:
-    df_copy = deepcopy(df.abs())
+    df_copy = df.abs()  # .abs() already returns a new DataFrame
   else:
-    df_copy = deepcopy(df)
+    df_copy = df.copy()  # pandas copy() is much faster than deepcopy
 
   ini_rows = df_copy.index.values.tolist()
   df_copy = df_copy.transpose()
@@ -29,14 +33,18 @@ def df_filter_col_sum(df, threshold, take_abs=True):
   ''' filter columns in matrix at some threshold
   and remove rows that have all zero values '''
 
-  from copy import deepcopy
-  from .__init__ import Network
-  net = Network()
+  # NOTE: deepcopy replaced with pandas copy() for optimization
+  # Uncomment below if issues arise:
+  # from copy import deepcopy
+  # if take_abs is True:
+  #   df_copy = deepcopy(df.abs())
+  # else:
+  #   df_copy = deepcopy(df)
 
   if take_abs is True:
-    df_copy = deepcopy(df.abs())
+    df_copy = df.abs()  # .abs() already returns a new DataFrame
   else:
-    df_copy = deepcopy(df)
+    df_copy = df.copy()  # pandas copy() is much faster than deepcopy
 
   df_copy = df_copy.transpose()
   df_copy = df_copy[df_copy.sum(axis=1) > threshold]
@@ -61,9 +69,11 @@ def grab_df_subset(df, keep_rows='all', keep_cols='all'):
   return df
 
 def get_sorted_rows(df, rank_type='sum'):
-  from copy import deepcopy
+  # NOTE: deepcopy replaced with pandas copy() for optimization
+  # from copy import deepcopy
+  # inst_df = deepcopy(df)
 
-  inst_df = deepcopy(df)
+  inst_df = df.copy()
   inst_df = inst_df.transpose()
 
   if rank_type == 'sum':
@@ -100,9 +110,11 @@ def filter_threshold(df, inst_rc, threshold, num_occur=1):
   Filter a network's rows or cols based on num_occur values being above a
   threshold (in absolute_value)
   '''
-  from copy import deepcopy
+  # NOTE: deepcopy replaced with pandas copy() for optimization
+  # from copy import deepcopy
+  # inst_df = deepcopy(df)
 
-  inst_df = deepcopy(df)
+  inst_df = df.copy()
 
   if inst_rc == 'col':
     inst_df = inst_df.transpose()

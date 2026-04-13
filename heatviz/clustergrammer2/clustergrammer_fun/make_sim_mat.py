@@ -1,6 +1,7 @@
 def main(net, inst_dm, which_sim, filter_sim, sim_mat_views=['N_row_sum']):
   from .__init__ import Network
-  from copy import deepcopy
+  # NOTE: deepcopy commented out for optimization
+  # from copy import deepcopy
   from . import calc_clust
 
   sim_dict = {}
@@ -14,7 +15,9 @@ def main(net, inst_dm, which_sim, filter_sim, sim_mat_views=['N_row_sum']):
 
   for inst_rc in which_sim:
 
-    sim_net[inst_rc] = deepcopy(Network())
+    # NOTE: deepcopy(Network()) is unnecessary - Network() already creates a new object
+    # sim_net[inst_rc] = deepcopy(Network())
+    sim_net[inst_rc] = Network()
 
     sim_net[inst_rc].dat['mat'] = sim_dict[inst_rc]
 
@@ -28,7 +31,9 @@ def main(net, inst_dm, which_sim, filter_sim, sim_mat_views=['N_row_sum']):
 
     all_views = []
     df = sim_net[inst_rc].dat_to_df()
-    send_df = deepcopy(df)
+    # NOTE: deepcopy replaced with pandas copy()
+    # send_df = deepcopy(df)
+    send_df = df.copy()
 
     sim_net[inst_rc].viz['views'] = all_views
 

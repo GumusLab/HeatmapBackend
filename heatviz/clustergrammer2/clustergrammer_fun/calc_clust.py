@@ -579,7 +579,8 @@ def cluster_row_and_col(net, dist_type='cosine', linkage_type='average',
     print(f"Function start: cluster_row_and_col called at {unique_id}")
     
     # Pre-process matrix once to avoid repeated deep copies
-    base_mat = np.array(net.dat['mat'], dtype=np.float64)
+    # Using float32 instead of float64 for 50% memory savings (7 decimal precision is sufficient for visualization)
+    base_mat = np.array(net.dat['mat'], dtype=np.float32)
     # Check for any NaN values before imputation
     nan_count = np.isnan(base_mat).sum()
     if nan_count > 0:
@@ -654,8 +655,16 @@ def cluster_row_and_col(net, dist_type='cosine', linkage_type='average',
         
         # Ranking - optimized to avoid repeated matrix operations
         if run_rank:
-            node_info['rank'] = optimized_sort_rank_nodes(base_mat, axis, 'sum')
-            node_info['rankvar'] = optimized_sort_rank_nodes(base_mat, axis, 'var')
+            # Check if we have pre-calculated rankings from BEFORE z-scoring
+            if hasattr(net, 'pre_zscore_ranks') and net.pre_zscore_ranks is not None:
+                print(f"Using pre-calculated rankings for {axis} (from raw data before z-scoring)")
+                node_info['rank'] = net.pre_zscore_ranks[axis]['rank']
+                node_info['rankvar'] = net.pre_zscore_ranks[axis]['rankvar']
+            else:
+                # Fallback: calculate on current matrix (z-scored if normalization was applied)
+                print(f"Calculating rankings for {axis} on current matrix")
+                node_info['rank'] = optimized_sort_rank_nodes(base_mat, axis, 'sum')
+                node_info['rankvar'] = optimized_sort_rank_nodes(base_mat, axis, 'var')
         else:
             node_info['rank'] = node_info['ini']
             node_info['rankvar'] = node_info['ini']
@@ -708,17 +717,17 @@ def cluster_row_and_col(net, dist_type='cosine', linkage_type='average',
 def _should_cache_distances(mat, max_cache_mb):
     """
     Determine if distance matrix caching is advisable based on matrix size and memory constraints.
-    
-    For a matrix with n rows/cols, distance matrix uses n*(n-1)/2 * 8 bytes (float64).
+
+    For a matrix with n rows/cols, distance matrix uses n*(n-1)/2 * 4 bytes (float32).
     """
     n_rows, n_cols = mat.shape
-    
+
     # Calculate memory requirements for both row and column distance matrices
     row_distances = n_rows * (n_rows - 1) // 2
     col_distances = n_cols * (n_cols - 1) // 2
-    
-    # Memory in MB (8 bytes per float64)
-    total_cache_mb = (row_distances + col_distances) * 8 / (1024 * 1024)
+
+    # Memory in MB (4 bytes per float32)
+    total_cache_mb = (row_distances + col_distances) * 4 / (1024 * 1024)
     
     print(f"Estimated cache memory: {total_cache_mb:.1f} MB for matrix {mat.shape}")
     
@@ -806,7 +815,7 @@ def optimized_distance_matrix(data, axis='row', metric='cosine', n_jobs=-1):
     try:
         # Ensure data is proper numpy array
         if not isinstance(data, np.ndarray):
-            data = np.array(data, dtype=np.float64)
+            data = np.array(data, dtype=np.float32)  # float32 for memory efficiency
         
         # Get effective number of jobs
         n_jobs = effective_n_jobs(n_jobs)
@@ -870,10 +879,10 @@ def _parallel_pdist_large_matrix(data, metric, n_jobs):
     print(f"Using large matrix optimization for {n} samples")
     
     # For very large matrices, use smaller blocks to manage memory
-    # Target ~2MB per block for the data itself
-    bytes_per_sample = data.shape[1] * 8  # 8 bytes per float64
-    target_block_mb = 2
-    target_block_samples = max(100, min(1000, int(target_block_mb * 1024 * 1024 / bytes_per_sample)))
+    # Target ~20MB per block for the data itself (increased from 2MB to reduce number of blocks)
+    bytes_per_sample = data.shape[1] * 4  # 4 bytes per float32
+    target_block_mb = 20
+    target_block_samples = max(100, min(5000, int(target_block_mb * 1024 * 1024 / bytes_per_sample)))
     
     # Create blocks
     n_blocks = max(1, (n + target_block_samples - 1) // target_block_samples)
@@ -1130,7 +1139,10 @@ def _combine_block_results_large(results, blocks, total_n):
                 print(f"Combination progress: {progress:.1f}% ({completed_pairs}/{total_pairs} block pairs)")
     
     print("✅ Block combination completed")
-    return condensed.astype(np.float64)
+    # Keep as float32 for memory efficiency (scipy linkage works with float32)
+    # Uncomment below if numerical stability issues arise:
+    # return condensed.astype(np.float64)
+    return condensed
 
 
 def _calculate_condensed_start_idx(start_row, total_n):

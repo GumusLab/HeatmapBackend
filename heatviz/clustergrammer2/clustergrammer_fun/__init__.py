@@ -1,5 +1,6 @@
 import numpy as np
 import pandas as pd
+# NOTE: deepcopy import kept for compatibility but replaced with .copy() where possible
 from copy import deepcopy
 
 from . import initialize_net

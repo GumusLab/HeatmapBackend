@@ -247,8 +247,16 @@ def compute_correlation_matrix(df, filters):
         
         if is_already_numeric:
             print("🎯 DataFrame is already a clean numeric matrix, skipping matrix detection")
-            data_matrix = df
-            gene_metadata = pd.DataFrame(index=df.index)  # Empty metadata
+            # Check if first column contains gene names (non-numeric)
+            first_col = df.columns[0] if len(df.columns) > 0 else None
+            if first_col and first_col in ['Unnamed: 0', 'gene_id', 'gene_name', 'Gene']:
+                # Preserve gene names column as metadata
+                gene_metadata = df[[first_col]]
+                data_matrix = df.drop(columns=[first_col])
+                print(f"📊 Preserved gene names from column: {first_col}")
+            else:
+                data_matrix = df
+                gene_metadata = pd.DataFrame(index=df.index)  # Empty metadata
             print(f"📊 AFTER SKIP: data_matrix shape: {data_matrix.shape}")
             print(f"📊 AFTER SKIP: gene_metadata shape: {gene_metadata.shape}")
         else:

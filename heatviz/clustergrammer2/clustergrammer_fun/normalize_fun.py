@@ -1,6 +1,7 @@
 import pandas as pd
 import numpy as np
-from copy import deepcopy
+# NOTE: deepcopy import commented out - using pandas .copy() instead for optimization
+# from copy import deepcopy
 
 # def run_norm(net, df=None, norm_type='zscore', axis='row', z_clip=None):
 #   '''
@@ -275,7 +276,9 @@ def swap_in_common_dist(df, common_dist):
   for inst_col in col_names:
 
     # get the sorted list of row names for the given column
-    tmp_series = deepcopy(df[inst_col])
+    # NOTE: deepcopy replaced with pandas copy() for optimization
+    # tmp_series = deepcopy(df[inst_col])
+    tmp_series = df[inst_col].copy()
     tmp_series = tmp_series.sort_values(ascending=False)
     sorted_names = tmp_series.index.tolist()
 

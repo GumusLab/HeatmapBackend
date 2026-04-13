@@ -49,6 +49,7 @@ from collections import defaultdict
 import math, os, random, uuid, logging, threading, copy, json
 from typing import List, Dict, Any
 import traceback
+import requests
 
 from django.http import HttpResponse, JsonResponse
 from rest_framework.decorators import api_view, parser_classes
@@ -77,6 +78,8 @@ from .correlation_engine import (
 logger = logging.getLogger('heatviz')
 # Default parameters for initial processing and layout generation
 DEFAULT_DENDROGRAM_DEPTH = 5
+
+
 HEMISPHERE_LAYOUT_RADIUS = 50.0
 CORRELATION_THRESHOLD_FOR_NEIGHBORS = 0.6 # Threshold for calculating neighbor counts
 
@@ -838,131 +841,158 @@ def _position_gene_in_cluster_fallback(j, M, cx, cy, cz, cluster_radius, main_ra
     
     return {"x": wx * factor, "y": wy * factor, "z": wz * factor}
 
+
+def read_uploaded_file(file_path, original_filename):
+    """Read an uploaded file (CSV, TSV, or XLSX) and return a DataFrame.
+
+    Also converts the file to TSV on disk so the rest of the pipeline
+    (which expects TSV) continues to work unchanged.
+    """
+    import pandas as pd
+
+    ext = os.path.splitext(original_filename)[1].lower()
+
+    if ext in ('.xls', '.xlsx'):
+        # dtype=str prevents Excel from silently converting gene names
+        # (e.g. "MARCH1" → date) or metadata strings to numbers
+        df = pd.read_excel(file_path, header=None, dtype=str, engine='openpyxl')
+    elif ext == '.csv':
+        df = pd.read_csv(file_path, sep=',', header=None, dtype=str)
+    elif ext in ('.tsv', '.txt'):
+        df = pd.read_csv(file_path, sep='\t', header=None)
+    else:
+        # Try to auto-detect delimiter from the first line
+        try:
+            with open(file_path, 'r', errors='replace') as f:
+                sample = f.readline()
+            if '\t' in sample:
+                df = pd.read_csv(file_path, sep='\t', header=None)
+            else:
+                df = pd.read_csv(file_path, sep=',', header=None)
+        except Exception:
+            # Last resort: try as Excel (file may be binary)
+            df = pd.read_excel(file_path, header=None, dtype=str, engine='openpyxl')
+
+    # Convert numeric-looking strings back to numbers so detect_matrix_start works
+    if ext in ('.xls', '.xlsx', '.csv'):
+        for col_idx in range(df.shape[1]):
+            df.iloc[:, col_idx] = pd.to_numeric(df.iloc[:, col_idx], errors='ignore')
+
+    # If the file was not already TSV, overwrite it as TSV so downstream code works
+    if ext != '.tsv':
+        df.to_csv(file_path, sep='\t', index=False, header=False)
+
+    return df
+
+
 @api_view(['POST'])
 @parser_classes([MultiPartParser])
 def process_data_view(request):
-    import time
-    import threading
-    import os
-    
-    # DEBUG: Log every single request that hits this endpoint
-    initial_timestamp = time.time()
-    initial_thread_id = threading.current_thread().ident  
-    initial_process_id = os.getpid()
-    
-    print('=' * 100)
-    print(f'🔍 INCOMING REQUEST to process_data_view')
-    print(f'   Timestamp: {initial_timestamp}')
-    print(f'   Human time: {time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(initial_timestamp))}')
-    print(f'   Process ID: {initial_process_id}')
-    print(f'   Thread ID: {initial_thread_id}')
-    print(f'   Request method: {request.method}')
-    print(f'   Content type: {request.content_type}')
-    print(f'   Request data keys: {list(request.data.keys())}')
-    print(f'   Request FILES keys: {list(request.FILES.keys())}')
-    print(f'   Client IP: {request.META.get("REMOTE_ADDR", "unknown")}')
-    print(f'   User Agent: {request.META.get("HTTP_USER_AGENT", "unknown")[:50]}...')
-    print('=' * 100)
+    """Process uploaded heatmap data file and return clustered heatmap."""
 
-    print('************* request came *************************************')
-    
     # Check if this is a strategy selection request (second step)
     if 'session_id' in request.data and 'imputation_strategy' in request.data:
-        print('************* strategy selection request *************************************')
         return handle_strategy_processing(request)
-    
+
     # Original file upload logic (first step)
     file = request.FILES.get('data')
     if not file:
-        print('************* No file provided *************************************')
         return Response({"error": "No file provided"}, status=status.HTTP_400_BAD_REQUEST)
-    
-    # DEBUG: Add comprehensive request tracing
-    import time
-    import threading
-    import hashlib
-    
-    request_timestamp = time.time()
-    thread_id = threading.current_thread().ident
-    process_id = os.getpid()
-    
-    # Calculate file hash for duplicate detection
-    file_content = file.read()
-    file.seek(0)  # Reset file pointer
-    file_hash = hashlib.md5(file_content).hexdigest()
-    file_size = len(file_content)
-    
-    print(f'🔍 DEBUG UPLOAD REQUEST:')
-    print(f'   Timestamp: {request_timestamp}')
-    print(f'   Process ID: {process_id}')
-    print(f'   Thread ID: {thread_id}')
-    print(f'   File size: {file_size} bytes')
-    print(f'   File hash: {file_hash}')
-    print(f'   Client IP: {request.META.get("REMOTE_ADDR", "unknown")}')
-    print(f'   User Agent: {request.META.get("HTTP_USER_AGENT", "unknown")[:100]}')
-    print(f'   Request Headers: {dict(request.headers)}')
-    print('*' * 80)
-           
-        # Defensive: Ensure directory exists before writing
+
+    # --- DUPLICATE UPLOAD DETECTION (DISABLED) ---
+    # This was causing issues when users close tab and try to re-upload.
+    # Uncomment if browser auto-retry becomes a problem again.
+    #
+    # import time
+    # import hashlib
+    #
+    # # Calculate file hash for duplicate detection (use chunks to save memory)
+    # md5 = hashlib.md5()
+    # for chunk in file.chunks():
+    #     md5.update(chunk)
+    # file_hash = md5.hexdigest()
+    # file.seek(0)  # Reset file pointer
+    #
+    # current_time = time.time()
+    # duplicate_window = 300  # 5 minutes
+    # cache_file = os.path.join(UPLOAD_DIR, 'upload_cache.json')
+    #
+    # # Load existing cache
+    # recent_uploads = {}
+    # if os.path.exists(cache_file):
+    #     try:
+    #         with open(cache_file, 'r') as f:
+    #             recent_uploads = json.load(f)
+    #     except (json.JSONDecodeError, IOError):
+    #         recent_uploads = {}
+    #
+    # # Clean old entries
+    # recent_uploads = {
+    #     h: t for h, t in recent_uploads.items()
+    #     if current_time - t < duplicate_window
+    # }
+    #
+    # # Check for duplicate
+    # if file_hash in recent_uploads:
+    #     time_diff = current_time - recent_uploads[file_hash]
+    #     return JsonResponse({
+    #         "error": "Duplicate upload detected",
+    #         "message": f"This file was already uploaded {time_diff:.1f} seconds ago.",
+    #         "is_duplicate": True
+    #     }, status=409)
+    #
+    # # Record upload
+    # recent_uploads[file_hash] = current_time
+    # try:
+    #     with open(cache_file, 'w') as f:
+    #         json.dump(recent_uploads, f)
+    # except IOError:
+    #     pass
+    # --- END DUPLICATE DETECTION ---
+
+    # Ensure upload directory exists
     if not os.path.exists(UPLOAD_DIR):
-        print('************* UPLOAD_DIR does not exist *************************************')
         os.makedirs(UPLOAD_DIR, exist_ok=True)
 
     try:
         # Generate a unique session ID
-        print('🔍 DEBUG: Starting session ID generation')
         session_id = str(uuid.uuid4())
-        print(f'🔍 DEBUG: Generated session_id: {session_id}')
-        
+
         filename = f"{session_id}.tsv"
         file_path = os.path.join(UPLOAD_DIR, filename)
         metadata_file_path = os.path.join(UPLOAD_DIR, f"{session_id}_metadata.json")
-        
-        print(f'🔍 DEBUG: File paths:')
-        print(f'   TSV: {file_path}')
-        print(f'   Metadata: {metadata_file_path}')
-        
-        # Check if files already exist (shouldn't happen with UUID4)
-        if os.path.exists(file_path):
-            print(f'🚨 WARNING: File already exists: {file_path}')
-        if os.path.exists(metadata_file_path):
-            print(f'🚨 WARNING: Metadata file already exists: {metadata_file_path}')
-        
-        # Save the uploaded file permanently
-        print(f'🔍 DEBUG: Starting file write to {file_path}')
-        file_write_start = time.time()
-        
+
+        # Save the uploaded file
         with open(file_path, 'wb+') as destination:
             for chunk in file.chunks():
                 destination.write(chunk)
-        
-        file_write_end = time.time()
-        print(f'🔍 DEBUG: File write completed in {file_write_end - file_write_start:.3f}s')
-        print(f'🔍 DEBUG: File saved: {file_path} (size: {os.path.getsize(file_path)} bytes)')
-          
-        # 📚 Extract and Save Metadata JSON
-        extract_and_save_metadata(tsv_file_path=file_path, metadata_json_path=metadata_file_path)
-        print(f"Metadata saved: {metadata_file_path}")
-          
-        # NEW: Check for missing values before processing
-        missing_analysis = analyze_missing_values(file_path)
 
-        
+        # Read file ONCE (supports CSV, TSV, XLSX) and normalize to TSV on disk
+        original_filename = file.name if file else ''
+        df = read_uploaded_file(file_path, original_filename)
+
+        # Extract and save metadata (pass df)
+        extract_and_save_metadata(df=df, metadata_json_path=metadata_file_path)
+
+        # Check for missing values (pass df)
+        missing_analysis = analyze_missing_values(df=df)
+
         if missing_analysis['has_missing_values']:
-            # Missing values detected - return analysis and available strategies
-            print(f"WARNING: Missing values detected: {missing_analysis['missing_percentage']:.2f}%")
-            
+            logger.info(f"Missing values detected: {missing_analysis['missing_percentage']:.2f}%")
             return JsonResponse({
                 "session_id": session_id,
                 "has_missing_values": True,
                 "missing_value_summary": missing_analysis,
-                # "available_strategies": get_available_strategies()
             }, status=200)
         else:
-            # No missing values - proceed with normal processing (default imputation)
-            print("No missing values detected, proceeding with clustering")
+            # Create a copy with first row as column headers for make_cluster
+            df_for_cluster = df.copy()
+            df_for_cluster.columns = df_for_cluster.iloc[0]  # Set first row as headers
+            df_for_cluster = df_for_cluster.iloc[1:]  # Remove first row from data
+
+            # No missing values - proceed with clustering
             response_data = make_cluster(
-                data=file_path,
+                data=df_for_cluster,  # Pass DataFrame with proper column headers
                 imputation_method='auto'  # Default when no missing values
             )
 
@@ -982,56 +1012,22 @@ def process_data_view(request):
             else:
                 raise TypeError(f"Unexpected response_data type: {type(response_data)}")
 
-                    # --- Trigger Asynchronous Global 3D Layout Generation ---
-            # DISABLED: 3D coordinate generation to reduce server strain
-            # Set initial task status
-            task_status_cache[session_id] = {'status': 'disabled', 'message': '3D layout generation disabled to reduce server load.'}
-            # _run_async_task_in_background(
-            #     _generate_and_store_3d_coords_task,
-            #     session_id,
-            #     heatmap_data, # Pass the entire heatmap_data to the async task
-            #     HEMISPHERE_LAYOUT_RADIUS
-            # )
-            logger.info(f"3D coordinate generation disabled for session: {session_id}")
+            # 3D coordinate generation is disabled
+            task_status_cache[session_id] = {'status': 'disabled', 'message': '3D layout generation disabled.'}
 
-
-            # DEBUG: Log successful completion
-            request_end_time = time.time()
-            total_processing_time = request_end_time - request_timestamp
-            
-            print(f'🔍 DEBUG: Request completed successfully')
-            print(f'   Total processing time: {total_processing_time:.3f}s')
-            print(f'   Session ID: {session_id}')
-            print(f'   Files created: {file_path}, {metadata_file_path}')
-            print('=' * 80)
-                        
             return JsonResponse({
                 "session_id": session_id,
                 "has_missing_values": False,
-                "heatmap_data": heatmap_data,  # Use the already parsed heatmap_data
-                # "global_3d_positions_status": task_status_cache[session_id]['status'] # Return initial status
-                "global_3d_positions_status": "disabled" # 3D coordinates disabled
-
-
+                "heatmap_data": heatmap_data,
+                "global_3d_positions_status": "disabled"
             }, status=200)
          
     except Exception as e:
         error_trace = traceback.format_exc()
-        
-        # DEBUG: Log error completion
-        request_end_time = time.time()
-        total_processing_time = request_end_time - request_timestamp
-        
-        print(f'🚨 DEBUG: Request failed with error')
-        print(f'   Total processing time: {total_processing_time:.3f}s')
-        print(f'   Error: {str(e)}')
-        print(f'   Process ID: {process_id}')
-        print(f'   Thread ID: {thread_id}')
-        print('=' * 80)
-        
         logger.error(f"Error processing file: {str(e)}\n{error_trace}")
         return JsonResponse({
             "error": str(e),
+            "error_type": type(e).__name__,
             "traceback": error_trace
         }, status=500)
     
@@ -1124,9 +1120,6 @@ def handle_strategy_processing(request):
             else:
                 imputation_kwargs = strategy_params
         
-        print(f"Processing with {strategy} imputation strategy")
-        print(f"Parameters: {imputation_kwargs}")
-        
         # Reconstruct file path
         filename = f"{session_id}.tsv"
         file_path = os.path.join(UPLOAD_DIR, filename)
@@ -1143,11 +1136,6 @@ def handle_strategy_processing(request):
             **imputation_kwargs  # Pass all strategy parameters as kwargs
         )
 
-        response = json.loads(response_data)
-
-        with open('genomics_data_file.json', 'w') as json_file:
-            json.dump(response, json_file, indent=4)
-
         return JsonResponse({
             "session_id": session_id,
             "heatmap_data": json.loads(response_data)
@@ -1162,32 +1150,30 @@ def handle_strategy_processing(request):
         }, status=500)
     
 
-def analyze_missing_values(file_path):
-    """Analyze missing values in the uploaded file - FIXED to only analyze numeric matrix"""
+def analyze_missing_values(df):
+    """Analyze missing values in the DataFrame.
+
+    Args:
+        df: DataFrame with the data (already loaded)
+    """
     import pandas as pd
     import numpy as np
 
     try:
-        # Read the entire file first
-        df = pd.read_csv(file_path, sep='\t', header=None)  # Read without assuming structure
-        print(f"Full file shape: {df.shape}")
-        
         # Detect where the numeric matrix starts
         matrix_start_row, matrix_start_col = detect_matrix_start(df)
-        print(f"Matrix starts at row={matrix_start_row}, col={matrix_start_col}")
-        
+
         # Extract only the numeric data matrix portion
         numeric_matrix = df.iloc[matrix_start_row:, matrix_start_col:]
-        print(f"Numeric matrix shape: {numeric_matrix.shape}")
-        
+
         # Convert to numpy array for analysis, handling non-numeric values
         try:
             data = numeric_matrix.values.astype(float)
         except ValueError:
             # If direct conversion fails, convert cell by cell
-            print("⚠️ Some values couldn't be converted to float, cleaning data...")
+            logger.warning("Some values couldn't be converted to float, cleaning data...")
             data = np.full(numeric_matrix.shape, np.nan)
-            
+
             for i in range(numeric_matrix.shape[0]):
                 for j in range(numeric_matrix.shape[1]):
                     val = numeric_matrix.iloc[i, j]
@@ -1196,31 +1182,21 @@ def analyze_missing_values(file_path):
                             if isinstance(val, (int, float)):
                                 data[i, j] = float(val)
                             elif isinstance(val, str):
-                                # Try to convert string to number
                                 data[i, j] = float(val)
                         except (ValueError, TypeError):
-                            # Leave as NaN if conversion fails
                             data[i, j] = np.nan
-        
-        print(f"Final data matrix shape: {data.shape}")
-        
+
         # Calculate missing value statistics on the numeric matrix only
         missing_mask = np.isnan(data)
         total_missing = np.sum(missing_mask)
         total_values = data.size
         missing_percentage = (total_missing / total_values) * 100
-        
+
         genes_with_missing = np.sum(np.any(missing_mask, axis=1))
         samples_with_missing = np.sum(np.any(missing_mask, axis=0))
-        
+
         genes_missing_percentage = (np.sum(missing_mask, axis=1) / data.shape[1]) * 100
         samples_missing_percentage = (np.sum(missing_mask, axis=0) / data.shape[0]) * 100
-        
-        print(f"Missing value analysis:")
-        print(f"   Total missing: {total_missing}")
-        print(f"   Missing percentage: {missing_percentage:.2f}%")
-        print(f"   Genes with missing: {genes_with_missing}")
-        print(f"   Samples with missing: {samples_with_missing}")
         
         return {
             "has_missing_values": bool(total_missing > 0),
@@ -1241,9 +1217,7 @@ def analyze_missing_values(file_path):
         }
         
     except Exception as e:
-        print(f"❌ Error analyzing missing values: {e}")
-        import traceback
-        traceback.print_exc()
+        logger.error(f"Error analyzing missing values: {e}", exc_info=True)
         return {
             "has_missing_values": False,
             "total_missing": 0,
@@ -1261,59 +1235,83 @@ def analyze_missing_values(file_path):
 
 @api_view(['POST'])
 def cleanup_session(request):
+    """Clean up all files associated with a session."""
     session_id = request.data.get('session_id')
     if not session_id:
         return Response({"error": "No session_id provided"}, status=400)
 
-    file_path = os.path.join(UPLOAD_DIR, f"{session_id}.tsv")
-    metadata_file_path = os.path.join(UPLOAD_DIR, f"{session_id}_metadata.json")
-    coords_file = os.path.join(UPLOAD_DIR, f"{session_id}_coords.json")
+    # List of all files to clean up for a session
+    files_to_delete = [
+        f"{session_id}.tsv",
+        f"{session_id}_metadata.json",
+    ]
 
     files_deleted = []
-    files_not_found = []
 
-    # Attempt to delete .tsv file
-    if os.path.exists(file_path):
-        os.remove(file_path)
-        files_deleted.append(f"{session_id}.tsv")
-    else:
-        files_not_found.append(f"{session_id}.tsv")
+    for filename in files_to_delete:
+        file_path = os.path.join(UPLOAD_DIR, filename)
+        if os.path.exists(file_path):
+            os.remove(file_path)
+            files_deleted.append(filename)
 
-    # Attempt to delete metadata JSON
-    if os.path.exists(metadata_file_path):
-        os.remove(metadata_file_path)
-        files_deleted.append(f"{session_id}_metadata.json")
-    else:
-        files_not_found.append(f"{session_id}_metadata.json")
-
-    # Attempt to delete coordinates JSON
-    if os.path.exists(coords_file):
-        os.remove(coords_file)
-        files_deleted.append(f"{session_id}_coords.json")
-    else:
-        files_not_found.append(f"{session_id}_coords.json")
+    # Clean up task status cache
+    if session_id in task_status_cache:
+        del task_status_cache[session_id]
 
     if files_deleted:
-        print(f"🗑️ Session {session_id} cleaned up. Files deleted: {files_deleted}")
+        logger.info(f"Session {session_id} cleaned up. Files deleted: {files_deleted}")
         return Response({
             "status": "Session cleaned up",
-            "files_deleted": files_deleted,
-            "files_not_found": files_not_found
+            "files_deleted": files_deleted
         }, status=200)
     else:
         return Response({
-            "error": "No session files found to clean up.",
-            "files_not_found": files_not_found
-        }, status=404)
+            "status": "No files found for session",
+            "session_id": session_id
+        }, status=200)
 
 
 # Add this validation function at the top of your views.py file
-def validate_command_values(action, target, value, df, metadata=None):
+def validate_command_values(action, target, value, df, metadata=None, filters=None):
     """
     Validate if the requested values exist in the dataset
     Returns (is_valid, error_message)
-    """   
+    """
     import pandas as pd
+
+    # Handle multi-filter actions - validate each filter in the list
+    if action in ["multi_filter", "multi_exclude"]:
+        if not filters:
+            return True, None  # No filters to validate
+
+        for filter_obj in filters:
+            filter_target = filter_obj.get("target")
+            filter_value = filter_obj.get("value")
+
+            if metadata and 'col' in metadata:
+                if filter_target in metadata['col']:
+                    available_values = metadata['col'][filter_target]
+                    if filter_value not in available_values:
+                        return False, f"value not found: '{filter_value}' not available in {filter_target} field. Available values: {', '.join(available_values[:10])}"
+                else:
+                    return False, f"value not found: '{filter_target}' field not found in column metadata. Available fields: {', '.join(metadata['col'].keys())}"
+        return True, None
+
+    # Handle exclude_filter - same validation as sample_filter
+    if action == "exclude_filter":
+        if metadata and 'col' in metadata:
+            if target in metadata['col']:
+                available_values = metadata['col'][target]
+                if value not in available_values:
+                    return False, f"value not found: '{value}' not available in {target} field. Available values: {', '.join(available_values[:10])}"
+            else:
+                return False, f"value not found: '{target}' field not found in column metadata"
+        return True, None
+
+    # Handle clear_filters - always valid
+    if action == "clear_filters":
+        return True, None
+
     if action == "sample_filter":
         # Check if the metadata field exists and has the requested value
         if metadata and 'col' in metadata:
@@ -1378,7 +1376,47 @@ def validate_command_values(action, target, value, df, metadata=None):
                     return False, f"value not found: requested {num_features} columns but only {max_cols} available"
         except ValueError:
             return False, f"value not found: '{value}' is not a valid number for variance selection"
-    
+
+    elif action == "set_linkage":
+        # Validate linkage method
+        valid_linkage_methods = ['average', 'complete', 'single', 'ward']
+        if value.lower() not in valid_linkage_methods:
+            return False, f"invalid linkage method: '{value}'. Valid options: {', '.join(valid_linkage_methods)}"
+
+    elif action == "set_distance":
+        # Validate distance metric (including common aliases)
+        valid_distance_metrics = ['euclidean', 'cosine', 'correlation', 'cityblock', 'pearson', 'manhattan']
+        if value.lower() not in valid_distance_metrics:
+            return False, f"invalid distance metric: '{value}'. Valid options: {', '.join(valid_distance_metrics)}"
+
+    elif action == "set_clustering":
+        # Validate both distance and linkage for combined action
+        valid_distance_metrics = ['euclidean', 'cosine', 'correlation', 'cityblock', 'pearson', 'manhattan']
+        valid_linkage_methods = ['average', 'complete', 'single', 'ward']
+
+        # Get distance and linkage from filters parameter (passed as a dict)
+        distance_val = filters.get('distance', '') if isinstance(filters, dict) else ''
+        linkage_val = filters.get('linkage', '') if isinstance(filters, dict) else ''
+
+        if distance_val and distance_val.lower() not in valid_distance_metrics:
+            return False, f"invalid distance metric: '{distance_val}'. Valid options: {', '.join(valid_distance_metrics)}"
+
+        if linkage_val and linkage_val.lower() not in valid_linkage_methods:
+            return False, f"invalid linkage method: '{linkage_val}'. Valid options: {', '.join(valid_linkage_methods)}"
+
+    elif action == "sort_by_expression":
+        # Check if the gene exists in the first column (gene names)
+        if hasattr(df, 'columns') and len(df.columns) > 0:
+            first_column = df.iloc[:, 0].dropna()
+            gene_names = [str(g) for g in first_column.tolist() if pd.notna(g)]
+
+            if value not in gene_names:
+                # Try case-insensitive search
+                gene_names_lower = [g.lower() for g in gene_names]
+                if value.lower() not in gene_names_lower:
+                    example_genes = gene_names[:5] if len(gene_names) >= 5 else gene_names
+                    return False, f"gene not found: '{value}' not found in gene list. Example genes: {', '.join(example_genes)} ...."
+
     # If we get here, validation passed
     return True, None
 
@@ -1387,7 +1425,6 @@ def validate_command_values(action, target, value, df, metadata=None):
 def command_execution(request):
     import pandas as pd
     import json
-    import requests
     try:
         session_id = request.data.get('session_id')
         command = request.data.get('command')
@@ -1395,10 +1432,15 @@ def command_execution(request):
         filters = current_state.get('filters', {})
         command_history = current_state.get('commandHistory', [])
 
-        print('**** command history is as follows *****', command_history)
-
         if not session_id or not command:
             return Response({"error": "Missing 'session_id' or 'command'."}, status=400)
+
+        # Check for OpenAI API key early so users get a clear message
+        if not os.environ.get("OPENAI_API_KEY"):
+            return JsonResponse(
+                {"error": "OpenAI API key not configured. Please run the container with: docker run -e OPENAI_API_KEY=sk-your-key ..."},
+                status=503
+            )
 
         file_path = os.path.join(UPLOAD_DIR, f"{session_id}.tsv")
         if not os.path.exists(file_path):
@@ -1415,17 +1457,13 @@ def command_execution(request):
             try:
                 with open(metadata_path, 'r') as metadata_file:
                     metadata = json.load(metadata_file)
-                print(f"Loaded metadata for session {session_id}")
             except Exception as e:
-                print(f"Error loading metadata file: {str(e)}")
-        else:
-            print(f"No metadata file found at {metadata_path}")
+                logger.warning(f"Error loading metadata file: {str(e)}")
 
         # ✅ Build Prompt for ChatGPT with metadata
         prompt = build_prompt(command, command_history, filters, metadata)
 
-        # ✅ Define OpenAI API key (store this in environment variables in production)
-        openai_api_key = "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"
+        openai_api_key = os.environ.get("OPENAI_API_KEY")
         
         try:
             # ✅ Call OpenAI ChatGPT API
@@ -1455,8 +1493,7 @@ def command_execution(request):
             
             # Check for errors in the API response
             if response.status_code != 200:
-                print(f"Error from OpenAI API: {response.status_code}")
-                print(response.text)
+                logger.error(f"Error from OpenAI API: {response.status_code} - {response.text}")
                 raise Exception(f"OpenAI API error: {response.status_code}")
                 
             response_data = response.json()
@@ -1464,97 +1501,167 @@ def command_execution(request):
             # Extract the content from the response
             gpt_response = response_data["choices"][0]["message"]["content"].strip()
 
-            print('********** gpt_response is as follows ************',gpt_response)
-            
-        
-            # Replace your existing response processing section with this:
-
             if not gpt_response:
-                print("Empty response received, using fallback")
                 ollama_response = generate_fallback_response(command)
             else:
                 try:
                     # Try to find and parse JSON in the response
                     import re
-                    json_pattern = r'(\{[\s\S]*?\})'
-                    matches = re.findall(json_pattern, gpt_response)
-                    
-                    if matches:
-                        ollama_response = None  # Initialize to track if we found valid JSON
-                        
-                        for potential_json in matches:
-                            try:
-                                parsed_json = json.loads(potential_json)
-                                
-                                # ✅ CRITICAL FIX: Check for error first, before looking for action
-                                if "error" in parsed_json:
-                                    print(f"Found valid JSON with error: {parsed_json['error']}")
-                                    ollama_response = parsed_json
-                                    break
-                                elif "action" in parsed_json:
-                                    print("Found valid JSON with action field")
-                                    ollama_response = parsed_json
-                                    break
-                                    
-                            except json.JSONDecodeError as json_error:
-                                print(f"JSON decode error for '{potential_json[:50]}...': {json_error}")
-                                continue
-                            except Exception as parse_error:
-                                print(f"Unexpected error parsing JSON '{potential_json[:50]}...': {parse_error}")
-                                continue
-                        
-                        # ✅ CRITICAL FIX: Check if we actually found valid JSON
-                        if ollama_response is None:
-                            # No valid JSON found in any match
-                            print("No valid JSON with action or error field found, using fallback")
-                            ollama_response = generate_fallback_response(command)
-                    else:
-                        # No JSON-like patterns found
-                        print("No JSON patterns found, using fallback")
+
+                    # Clean the response - replace smart quotes and other problematic characters
+                    def clean_json_string(s):
+                        """Replace smart quotes and other special characters with standard ones."""
+                        replacements = {
+                            '"': '"',  # Left double quote
+                            '"': '"',  # Right double quote
+                            ''': "'",  # Left single quote
+                            ''': "'",  # Right single quote
+                            '–': '-',  # En dash
+                            '—': '-',  # Em dash
+                            '…': '...',  # Ellipsis
+                        }
+                        for old, new in replacements.items():
+                            s = s.replace(old, new)
+                        return s
+
+                    gpt_response = clean_json_string(gpt_response)
+
+                    # First, try to parse the entire response as JSON (handles clean responses)
+                    ollama_response = None
+                    try:
+                        cleaned_response = gpt_response.strip()
+                        # Remove markdown code blocks if present
+                        if cleaned_response.startswith("```"):
+                            cleaned_response = re.sub(r'^```(?:json)?\s*', '', cleaned_response)
+                            cleaned_response = re.sub(r'\s*```$', '', cleaned_response)
+                        parsed_json = json.loads(cleaned_response)
+                        if "action" in parsed_json or "error" in parsed_json:
+                            ollama_response = parsed_json
+                    except json.JSONDecodeError:
+                        pass  # Will try regex extraction below
+
+                    # If direct parsing failed, try to extract JSON with proper brace matching
+                    if ollama_response is None:
+                        # Find JSON by matching balanced braces
+                        def extract_json_objects(text):
+                            """Extract JSON objects with proper brace balancing."""
+                            objects = []
+                            i = 0
+                            while i < len(text):
+                                if text[i] == '{':
+                                    depth = 1
+                                    start = i
+                                    i += 1
+                                    while i < len(text) and depth > 0:
+                                        if text[i] == '{':
+                                            depth += 1
+                                        elif text[i] == '}':
+                                            depth -= 1
+                                        i += 1
+                                    if depth == 0:
+                                        objects.append(text[start:i])
+                                else:
+                                    i += 1
+                            return objects
+
+                        matches = extract_json_objects(gpt_response)
+
+                        if matches:
+                            for potential_json in matches:
+                                try:
+                                    parsed_json = json.loads(potential_json)
+
+                                    # Check for error first, before looking for action
+                                    if "error" in parsed_json:
+                                        ollama_response = parsed_json
+                                        break
+                                    elif "action" in parsed_json:
+                                        ollama_response = parsed_json
+                                        break
+
+                                except json.JSONDecodeError:
+                                    continue
+                                except Exception:
+                                    continue
+
+                    # Check if we actually found valid JSON
+                    if ollama_response is None:
                         ollama_response = generate_fallback_response(command)
-                                    
+
                 except Exception as e:
-                    print(f"Error processing ChatGPT response: {e}")
+                    logger.warning(f"Error processing ChatGPT response: {e}")
                     ollama_response = generate_fallback_response(command)
 
-                    
+
         except Exception as e:
-            print(f"Error with ChatGPT request: {str(e)}")
+            logger.error(f"Error with ChatGPT request: {str(e)}")
             ollama_response = generate_fallback_response(command)
         
+        # If GPT returned an error, try the keyword-based fallback parser as a second chance.
+        # GPT can be overly aggressive at rejecting valid commands like "find xyz" or "show pathways".
+        if "error" in ollama_response and "action" not in ollama_response:
+            fallback = generate_fallback_response(command)
+            if "action" in fallback:
+                # Fallback found a valid action — use it instead of GPT's error
+                logger.info(f"🔄 GPT returned error, but fallback found action: {fallback}")
+                ollama_response = fallback
+            elif "suggestions" in fallback:
+                # Fallback has a more helpful error with suggestions — use it
+                logger.info(f"🔄 GPT returned generic error, using fallback suggestions: {fallback}")
+                ollama_response = fallback
+
         # Extract data from response
         action = ollama_response.get("action")
         target = ollama_response.get("target")
         value = ollama_response.get("value", "")
-        
+
+        # 🔍 DEBUG: Log what GPT returned
+        logger.info(f"🔍 USER COMMAND: '{command}'")
+        logger.info(f"🔍 GPT RAW RESPONSE: {ollama_response}")
+        logger.info(f"🔍 PARSED: action='{action}', target='{target}', value='{value}'")
+        print(f"\n{'='*60}")
+        print(f"🔍 USER COMMAND: '{command}'")
+        print(f"🔍 GPT RAW RESPONSE: {ollama_response}")
+        print(f"🔍 PARSED: action='{action}', target='{target}', value='{value}'")
+        print(f"{'='*60}\n")
+
         # ✅ NEW: Check if there's already an error in the response (from improved prompt)
         if "error" in ollama_response:
-            return Response({
+            error_response = {
                 "error": ollama_response["error"],
                 "commandHistory": command_history + [command]
-            }, status=200)
-        
-        # ✅ NEW: Validate the command values against actual data
-        is_valid, error_message = validate_command_values(action, target, value, df, metadata)
+            }
+            # Include suggestions if the fallback provided them
+            if "suggestions" in ollama_response:
+                error_response["suggestions"] = ollama_response["suggestions"]
+            return Response(error_response, status=200)
 
-        print('****** ollama response is  *******',ollama_response)
-        print('****** is it valid ******',is_valid)
-        print('******* error message is *******',error_message)
-        
+        # Get filters array for multi_filter/multi_exclude actions
+        filter_list = ollama_response.get("filters", [])
+
+        # For set_clustering, pass the full response for validation
+        validation_filters = ollama_response if action == "set_clustering" else filter_list
+
+        # Validate the command values against actual data
+        is_valid, error_message = validate_command_values(action, target, value, df, metadata, filters=validation_filters)
+
         if not is_valid:
             return Response({
                 "error": error_message,
                 "commandHistory": command_history + [command]
             }, status=200)
         
-        VIEW_ONLY_ACTIONS = ['sort', 'sort_by_meta', 'cluster', 'search', 'set_opacity']
+        VIEW_ONLY_ACTIONS = ['sort', 'sort_by_meta', 'sort_by_expression', 'cluster', 'search', 'set_opacity']
         PATHWAY_ACTIONS = ['pathway_filter', 'functional_filter', 'pathway_search']
+        CLUSTERING_PARAM_ACTIONS = ['zscore', 'set_distance', 'set_linkage', 'set_clustering']  # Actions that affect clustering parameters
+
+        # Extract distance and linkage for set_clustering action
+        distance_from_response = ollama_response.get("distance", "")
+        linkage_from_response = ollama_response.get("linkage", "")
 
 
         if action in VIEW_ONLY_ACTIONS:
-            # --- This is a "View State" command ---
-            # We don't need to re-cluster. Just send the command back to the frontend.
-            print(f"Action '{action}' is view-only, will be handled by the frontend.")
+            # View-only command - no re-clustering needed
             response_data = {
                 "action": action,
                 "target": target,
@@ -1579,27 +1686,30 @@ def command_execution(request):
                     # Handle "show immune genes" type commands
                     try:
                         functional_genes = get_functional_genes(value)
-                        
+
                         if functional_genes:
-                            print(f"Found {len(functional_genes)} genes for function '{value}'")
                             
-                            # Use your existing filter function for gene rows
-                            filtered_df = filter_genes_by_ids(df, functional_genes)
+                            # First apply existing filters to the original data
+                            pre_filtered_df = apply_filters(df, filters, session_id) if filters else df
+                            
+                            # Then apply functional filter to the already-filtered data
+                            filtered_df = filter_genes_by_ids(pre_filtered_df, functional_genes)
                             
                             # Check if filtering actually worked
                             if filtered_df.shape[0] > df.iloc[:detect_matrix_start(df)[0], :].shape[0]:  # More than just metadata rows
                                 filters['functional'] = value
-                                
-                                # Re-cluster the filtered data
-                                clustering_result_str = make_cluster(filtered_df)
 
-                                print('************************************************************',clustering_result_str)
+                                # Extract clustering parameters from filters
+                                zscore_axis, dist_type, linkage_type = extract_clustering_params_from_filters(filters)
+
+                                # Re-cluster the filtered data with clustering params
+                                clustering_result_str = make_cluster(filtered_df, zscore_axis=zscore_axis, dist_type=dist_type, linkage_type=linkage_type)
                                 clustering_result = json.loads(clustering_result_str)
-                                
+
                                 # Count how many genes were actually found
                                 matrix_start_row, _ = detect_matrix_start(filtered_df)
                                 genes_found = filtered_df.shape[0] - matrix_start_row
-                                
+
                                 response_data = {
                                     "action": action,
                                     "target": target,
@@ -1631,9 +1741,7 @@ def command_execution(request):
                             }
                             
                     except Exception as e:
-                        print(f"Error in functional_filter: {str(e)}")
-                        import traceback
-                        traceback.print_exc()
+                        logger.error(f"Error in functional_filter: {str(e)}", exc_info=True)
                         response_data = {
                             "error": f"Error filtering by function: {str(e)}",
                             "commandHistory": command_history + [command]
@@ -1643,25 +1751,30 @@ def command_execution(request):
                     # Handle "show STAT3 targets" type commands
                     try:
                         pathway_genes = get_pathway_genes(value, action)
-                        
+
                         if pathway_genes:
-                            print(f"Found {len(pathway_genes)} genes for pathway '{value}'")
                             
-                            # Use your existing filter function for gene rows
-                            filtered_df = filter_genes_by_ids(df, pathway_genes)
+                            # First apply existing filters to the original data
+                            pre_filtered_df = apply_filters(df, filters, session_id) if filters else df
+                            
+                            # Then apply pathway filter to the already-filtered data
+                            filtered_df = filter_genes_by_ids(pre_filtered_df, pathway_genes)
                             
                             # Check if filtering actually worked
                             if filtered_df.shape[0] > df.iloc[:detect_matrix_start(df)[0], :].shape[0]:  # More than just metadata rows
                                 filters['pathway'] = value
-                                
-                                # Re-cluster the filtered data
-                                clustering_result_str = make_cluster(filtered_df)
+
+                                # Extract clustering parameters from filters
+                                zscore_axis, dist_type, linkage_type = extract_clustering_params_from_filters(filters)
+
+                                # Re-cluster the filtered data with clustering params
+                                clustering_result_str = make_cluster(filtered_df, zscore_axis=zscore_axis, dist_type=dist_type, linkage_type=linkage_type)
                                 clustering_result = json.loads(clustering_result_str)
-                                
+
                                 # Count how many genes were actually found
                                 matrix_start_row, _ = detect_matrix_start(filtered_df)
                                 genes_found = filtered_df.shape[0] - matrix_start_row
-                                
+
                                 response_data = {
                                     "action": action,
                                     "target": target,
@@ -1706,11 +1819,9 @@ def command_execution(request):
                 elif action == 'pathway_search':
                     # Handle "list immune pathways" type commands
 
-                    print('*************** iT is pathway searching command **************')
                     # Handle "list immune pathways" type commands
                     try:
                         matching_pathways = search_pathways_by_category(value)
-                        print(f"Found pathways: {matching_pathways}")
                         
                         if matching_pathways:
                             # Format results for frontend display - KEEP IT SIMPLE
@@ -1739,23 +1850,132 @@ def command_execution(request):
                                 "commandHistory": command_history + [command]
                             }
                     except Exception as e:
-                        print(f"Error in pathway_search: {str(e)}")
+                        logger.error(f"Error in pathway_search: {str(e)}", exc_info=True)
                         response_data = {
                             "error": f"Error searching pathways: {str(e)}",
                             "commandHistory": command_history + [command]
                         }
         elif action not in VIEW_ONLY_ACTIONS and action not in PATHWAY_ACTIONS:
-            # --- This is a "Data Subsetting" command ---
-            # This is your original logic for filtering and re-clustering
-            print(f"Action '{action}' requires data re-processing on the backend.")
-            updated_filters = update_filters(filters, action, target, value)
-            final_df = apply_filters(df, updated_filters, session_id)
+            # Data subsetting or clustering parameter command
+            MULTI_FILTER_ACTIONS = ['multi_filter', 'exclude_filter', 'multi_exclude', 'clear_filters']
+
+            if action in MULTI_FILTER_ACTIONS:
+                filter_list = ollama_response.get("filters", [])
+                updated_filters = update_filters_multi(filters, action, filter_list=filter_list, target=target, value=value)
+
+                # Apply the updated filters
+                final_df = apply_filters(df, updated_filters, session_id) if updated_filters.get('row') or updated_filters.get('col') else df
+
+            # For clustering parameter actions (zscore, set_distance), handle filters specially
+            elif action in CLUSTERING_PARAM_ACTIONS:
+                updated_filters = copy.deepcopy(filters)  # Make a copy
+
+                # If this is a zscore command, add it to the appropriate filter array
+                if action == 'zscore':
+                    # Determine which axis: 'rows' → 'row', 'cols' → 'col'
+                    filter_key = 'row' if target == 'rows' else 'col'
+
+                    # Initialize the filter array if it doesn't exist
+                    if filter_key not in updated_filters:
+                        updated_filters[filter_key] = []
+
+                    # Remove any existing zscore filter for this axis
+                    updated_filters[filter_key] = [
+                        f for f in updated_filters[filter_key]
+                        if f.get('type') != 'zscore'
+                    ]
+
+                    # Add the new zscore filter (no need to store axis - filter_key tells us that)
+                    updated_filters[filter_key].append({
+                        'type': 'zscore'
+                    })
+
+                final_df = apply_filters(df, filters, session_id) if filters else df
+            else:
+                updated_filters = update_filters(filters, action, target, value)
+                final_df = apply_filters(df, updated_filters, session_id)
+
             final_df.columns = ['' if 'unnamed' in str(col).lower() else str(col) for col in final_df.columns]
 
             if final_df is not None and not final_df.empty:
-                clustering_result_str = make_cluster(final_df)
+                # Extract clustering parameters from the updated filters
+                zscore_axis, dist_type, linkage_type = extract_clustering_params_from_filters(updated_filters)
+
+                # Override with current action if it's a clustering parameter action
+                # Check if this is a zscore command and pass appropriate axis
+                if action == 'zscore':
+                    zscore_axis = 'row' if target == 'rows' else 'col'
+
+                if action == 'set_distance':
+                    dist_type = value
+                    # Store distance metric in both row and col filters for persistence
+                    for filter_key in ['row', 'col']:
+                        if filter_key not in updated_filters:
+                            updated_filters[filter_key] = []
+                        updated_filters[filter_key] = [
+                            f for f in updated_filters[filter_key]
+                            if f.get('type') != 'distance'
+                        ]
+                        updated_filters[filter_key].append({
+                            'type': 'distance',
+                            'value': dist_type
+                        })
+
+                if action == 'set_linkage':
+                    linkage_type = value
+                    # Store linkage method in both row and col filters for persistence
+                    for filter_key in ['row', 'col']:
+                        if filter_key not in updated_filters:
+                            updated_filters[filter_key] = []
+                        updated_filters[filter_key] = [
+                            f for f in updated_filters[filter_key]
+                            if f.get('type') != 'linkage'
+                        ]
+                        updated_filters[filter_key].append({
+                            'type': 'linkage',
+                            'value': linkage_type
+                        })
+
+                if action == 'set_clustering':
+                    # Handle combined distance + linkage command
+                    if distance_from_response:
+                        dist_type = distance_from_response
+                        # Store distance metric in both row and col filters
+                        for filter_key in ['row', 'col']:
+                            if filter_key not in updated_filters:
+                                updated_filters[filter_key] = []
+                            updated_filters[filter_key] = [
+                                f for f in updated_filters[filter_key]
+                                if f.get('type') != 'distance'
+                            ]
+                            updated_filters[filter_key].append({
+                                'type': 'distance',
+                                'value': dist_type
+                            })
+
+                    if linkage_from_response:
+                        linkage_type = linkage_from_response
+                        # Store linkage method in both row and col filters
+                        for filter_key in ['row', 'col']:
+                            if filter_key not in updated_filters:
+                                updated_filters[filter_key] = []
+                            updated_filters[filter_key] = [
+                                f for f in updated_filters[filter_key]
+                                if f.get('type') != 'linkage'
+                            ]
+                            updated_filters[filter_key].append({
+                                'type': 'linkage',
+                                'value': linkage_type
+                            })
+
+                # Call make_cluster with all parameters including linkage_type
+                print(f"🔧 CALLING make_cluster with: zscore_axis={zscore_axis}, dist_type={dist_type}, linkage_type={linkage_type}")
+                clustering_result_str = make_cluster(final_df, zscore_axis=zscore_axis, dist_type=dist_type, linkage_type=linkage_type)
+
                 clustering_result = json.loads(clustering_result_str)
-                
+                print(f"🔧 CLUSTERING RESULT: Got {len(str(clustering_result))} chars of data")
+                print(f"🔧 CLUSTERING RESULT KEYS: {clustering_result.keys() if isinstance(clustering_result, dict) else 'not a dict'}")
+
                 response_data = {
                     "action": action,
                     "target": target,
@@ -1764,6 +1984,13 @@ def command_execution(request):
                     "clustering_result": clustering_result, # ✅ Send new data
                     "commandHistory": command_history + [command]
                 }
+
+                # Add distance and linkage to response for set_clustering action
+                if action == 'set_clustering':
+                    response_data["distance"] = dist_type
+                    response_data["linkage"] = linkage_type
+
+                print(f"🔧 RESPONSE includes clustering_result: {'clustering_result' in response_data}")
             else:
                 response_data = {
                     "error": "Filtering resulted in an empty dataset.",
@@ -1771,73 +1998,90 @@ def command_execution(request):
                 }
 
         return Response(response_data, status=200)
-    
+
     except Exception as e:
         error_trace = traceback.format_exc()
-        print(f"ERROR: {str(e)}\n{error_trace}")
+        logger.error(f"Error in command_execution: {str(e)}", exc_info=True)
         return Response({"error": str(e), "traceback": error_trace}, status=500)
 
     
+def extract_clustering_params_from_filters(filters):
+    """
+    Extract zscore_axis, dist_type, and linkage_type from filters.
+    Returns tuple: (zscore_axis, dist_type, linkage_type)
+    """
+    zscore_axis = 'col'  # Default
+    dist_type = 'euclidean'  # Default
+    linkage_type = 'average'  # Default
+
+    if not filters:
+        return zscore_axis, dist_type, linkage_type
+
+    # Check for zscore filter in row filters
+    if 'row' in filters:
+        for f in filters.get('row', []):
+            if f.get('type') == 'zscore':
+                zscore_axis = 'row'
+                break
+
+    # Check for zscore filter in col filters
+    if 'col' in filters:
+        for f in filters.get('col', []):
+            if f.get('type') == 'zscore':
+                zscore_axis = 'col'
+                break
+
+    # Check for distance metric in filters
+    for filter_key in ['row', 'col']:
+        if filter_key in filters:
+            for f in filters.get(filter_key, []):
+                if f.get('type') == 'distance':
+                    dist_type = f.get('value', 'euclidean')
+                    break
+
+    # Check for linkage method in filters
+    for filter_key in ['row', 'col']:
+        if filter_key in filters:
+            for f in filters.get(filter_key, []):
+                if f.get('type') == 'linkage':
+                    linkage_type = f.get('value', 'average')
+                    break
+
+    return zscore_axis, dist_type, linkage_type
+
 def filter_genes_by_ids(df, gene_ids):
+    """Filter DataFrame to only include rows that match the provided gene IDs."""
     import pandas as pd
 
-    """
-    Filter DataFrame to only include rows that match the provided gene IDs.
-    Looks for gene IDs in the first few columns (gene names/identifiers).
-    """
     try:
-        print(f"Filtering for {len(gene_ids)} specific gene IDs...")
-        
-        # Detect where the matrix starts (similar to your existing logic)
         matrix_start_row, matrix_start_col = detect_matrix_start(df)
-        print(f"Matrix starts at row {matrix_start_row}, col {matrix_start_col}")
-        
-        # Get the data portion (rows from matrix_start_row onwards)
         data_rows = df.iloc[matrix_start_row:, :]
         metadata_rows = df.iloc[:matrix_start_row, :]
-        
-        print(f"Data rows shape: {data_rows.shape}")
-        print(f"Looking for gene IDs in columns: {data_rows.columns[:matrix_start_col].tolist()}")
-        
-        # Find matching rows by checking gene identifier columns
+
         matching_indices = []
-        
         for idx, row in data_rows.iterrows():
-            # Check the first few columns for gene identifiers
             gene_found = False
             for col_idx in range(min(matrix_start_col, len(row))):
-                cell_value = str(row.iloc[col_idx]).strip()                
-                # Check if this cell value matches any of our target gene IDs
+                cell_value = str(row.iloc[col_idx]).strip()
                 if cell_value in gene_ids:
                     matching_indices.append(idx)
                     gene_found = True
                     break
-            
-            # Also check if the row index itself is a gene ID
+
             if not gene_found and str(row.name) in gene_ids:
                 matching_indices.append(idx)
-                print(f"Found gene '{row.name}' as row index")
-        
-        print(f"Found {len(matching_indices)} matching genes out of {len(gene_ids)} requested")
-        
+
         if not matching_indices:
-            print("⚠️ Warning: No matching genes found!")
-            return df  # Return original if no matches
-        
-        # Filter to only matching rows
+            logger.warning("No matching genes found in filter_genes_by_ids")
+            return df
+
         filtered_data_rows = data_rows.loc[matching_indices]
-        
-        # Combine metadata rows with filtered data rows
         filtered_df = pd.concat([metadata_rows, filtered_data_rows], axis=0)
-        
-        print(f"Filtered DataFrame shape: {filtered_df.shape}")
         return filtered_df
-        
+
     except Exception as e:
-        print(f"Error in filter_genes_by_ids: {str(e)}")
-        import traceback
-        traceback.print_exc()
-        return df  # Return original on error
+        logger.error(f"Error in filter_genes_by_ids: {str(e)}", exc_info=True)
+        return df
 
 """
 Updated Django view integrating the ultra-optimized correlation engine.
@@ -1861,22 +2105,9 @@ def correlation_network(request):
     - Memory optimization
     """
     try:
-        # Extract data from request (UNCHANGED)
         session_id = request.data.get('sessionId')
         gene_ids = request.data.get('geneIds', [])
         filters = request.data.get('filters', {})
-        
-        # Print received arguments (UNCHANGED)
-        print('===== ULTRA-OPTIMIZED CORRELATION NETWORK REQUEST =====')
-        print(f'Session ID: {session_id}')
-        print(f'Number of Gene IDs: {len(gene_ids)}')
-        print(f'Sample Gene IDs: {gene_ids[:10]}...' if len(gene_ids) > 10 else f'Gene IDs: {gene_ids}')
-        print(f'Filters: {filters}')
-        
-        # Estimate processing time for user feedback
-        estimated_time = estimate_correlation_job_time(len(gene_ids), filters.get('correlationThreshold', 0.3))
-        print(f'Estimated processing time: {estimated_time} seconds')
-        print('=' * 60)
         
         # Basic validation (UNCHANGED)
         if not session_id:
@@ -1898,18 +2129,11 @@ def correlation_network(request):
         if not os.path.exists(file_path):
             return Response({"error": "Session data not found."}, status=404)
         
-        # ✅ Load Original Data (UNCHANGED)
         df = pd.read_csv(file_path, sep="\t")
-        print(f"Original DataFrame shape: {df.shape}")
-        
-        # ✅ Filter DataFrame to only include specific gene IDs (UNCHANGED)
         filtered_gene_df = filter_genes_by_ids(df, gene_ids)
-        print(f"After gene filtering shape: {filtered_gene_df.shape}")
-        
-        # ✅ Apply additional filters using your existing function (UNCHANGED)
+
         if filters:
             final_df = apply_filters(filtered_gene_df, filters, session_id)
-            print(f"After applying filters shape: {final_df.shape}")
         else:
             final_df = filtered_gene_df
         
@@ -1917,16 +2141,12 @@ def correlation_network(request):
         if final_df.empty:
             return Response({"error": "No data remaining after filtering"}, status=400)
         
-        # Check if dataset is reasonable size
         if final_df.shape[0] < 2:
             return Response({"error": "Need at least 2 genes for correlation analysis"}, status=400)
         
-        # ✅ ULTRA-OPTIMIZED Correlation Computation
-        print("🚀 Starting ultra-optimized correlation computation...")
-        
         # Set intelligent defaults if not provided
         optimized_filters = {
-            'correlationThreshold': filters.get('correlationThreshold', 0.7),  # More realistic default
+            'correlationThreshold': filters.get('correlationThreshold', 0.5),  # Lower threshold to capture more correlations
             'pValueThreshold': filters.get('pValueThreshold', 0.05),           # Less strict default
             'maxCorrelations': filters.get('maxCorrelations', 20000),
             'variancePercentile': filters.get('variancePercentile', 0.2),     # Keep top 80%
@@ -1937,23 +2157,83 @@ def correlation_network(request):
         # Run ultra-optimized correlation computation
         correlation_result = compute_correlation_matrix(final_df, optimized_filters)
         
-        # Handle errors from correlation computation
         if "error" in correlation_result:
             return Response({
                 "error": "Correlation computation failed",
                 "details": correlation_result["error"]
             }, status=500)
-        
-        # Print results summary
-        print(f"🎯 Correlation computation completed!")
-        print(f"📊 Total correlations found: {correlation_result.get('totalCorrelations', 0):,}")
-        print(f"⏱️  Computation time: {correlation_result.get('computationTime', 0):.2f}s")
-        print(f"🏃 Speed: {correlation_result.get('pairsPerSecond', 0):,.0f} pairs/second")
-        
-        # Estimate response data size
+
+        # Extract metadata for nodes that appear in correlations
+        node_metadata = {}
+        unique_nodes = set()
+
+        for corr in correlation_result.get('correlations', []):
+            unique_nodes.add(corr['gene1'])
+            unique_nodes.add(corr['gene2'])
+
+        try:
+            file_path = os.path.join(UPLOAD_DIR, f"{session_id}.tsv")
+            if os.path.exists(file_path):
+                original_df = pd.read_csv(file_path, sep="\t")
+                from .correlation_engine import detect_matrix_start
+                matrix_start_row, matrix_start_col = detect_matrix_start(original_df)
+                
+                # Get metadata columns (everything before the numeric matrix)
+                metadata_cols = original_df.columns[:matrix_start_col].tolist()
+                
+                # Extract metadata for each node that appears in correlations
+                for node_id in unique_nodes:
+                    # Find the row for this node
+                    # Check if node_id matches the index or first column
+                    node_row = None
+                    
+                    # Try to find node in the data rows (after metadata rows)
+                    data_rows = original_df.iloc[matrix_start_row:, :]
+                    
+                    # Check if node_id is in the index
+                    if node_id in data_rows.index:
+                        node_row = data_rows.loc[node_id]
+                    else:
+                        # Check first column for node ID
+                        if len(metadata_cols) > 0:
+                            first_col = metadata_cols[0]
+                            matching_rows = data_rows[data_rows[first_col].astype(str) == str(node_id)]
+                            if not matching_rows.empty:
+                                node_row = matching_rows.iloc[0]
+                    
+                    # Extract metadata for this node
+                    if node_row is not None:
+                        node_metadata[node_id] = {}
+                        
+                        for col in metadata_cols:
+                            value = node_row[col] if col in node_row.index else None
+                            if value is not None and pd.notna(value):
+                                # Skip the ID column (Unnamed: 0) since it's redundant
+                                if col == 'Unnamed: 0' or str(value) == str(node_id):
+                                    continue
+                                    
+                                # Parse structured metadata (e.g., "Cell_Type: B cells")
+                                value_str = str(value)
+                                if ':' in value_str:
+                                    # Split on ':' to get key-value pairs
+                                    parts = value_str.split(':', 1)
+                                    if len(parts) == 2:
+                                        key = parts[0].strip().replace(' ', '_').lower()
+                                        val = parts[1].strip()
+                                        node_metadata[node_id][key] = val
+                                else:
+                                    # Use column name as key
+                                    col_name = col.replace(' ', '_').lower()
+                                    node_metadata[node_id][col_name] = value_str
+                    else:
+                        node_metadata[node_id] = {}
+
+        except Exception as e:
+            logger.warning(f"Could not extract node metadata: {str(e)}")
+            node_metadata = {node: {} for node in unique_nodes}
+
         n_correlations = correlation_result.get('totalCorrelations', 0)
         estimated_size = get_correlation_data_size_estimate(n_correlations)
-        print(f"📦 Estimated response size: {estimated_size}")
         
         # Enhanced response data with additional metadata
         response_data = {
@@ -1962,6 +2242,7 @@ def correlation_network(request):
             "filteredGenes": final_df.shape[0] if hasattr(final_df, 'shape') else 0,
             "filteredSamples": final_df.shape[1] if hasattr(final_df, 'shape') else 0,
             "correlationMatrix": correlation_result,
+            "nodeMetadata": node_metadata,  # ✅ Add node metadata
             "status": "computed",
             "message": f"Successfully computed correlations for {correlation_result.get('totalCorrelations', 0):,} gene pairs",
             "filters": optimized_filters,
@@ -1996,9 +2277,9 @@ def correlation_network(request):
         
         return Response(response_data, status=200)
     
-    except MemoryError as e:
+    except MemoryError:
         error_message = f"Insufficient memory for correlation analysis with {len(gene_ids)} genes"
-        print(f"💾 MEMORY ERROR: {error_message}")
+        logger.error(error_message)
         return Response({
             "error": error_message,
             "suggestions": [
@@ -2007,24 +2288,24 @@ def correlation_network(request):
                 "Use smaller maxCorrelations limit"
             ],
             "memoryError": True
-        }, status=413)  # Payload Too Large
-    
-    except TimeoutError as e:
+        }, status=413)
+
+    except TimeoutError:
         error_message = "Correlation computation timed out"
-        print(f"⏰ TIMEOUT ERROR: {error_message}")
+        logger.error(error_message)
         return Response({
             "error": error_message,
             "suggestions": [
-                "Reduce the number of genes", 
+                "Reduce the number of genes",
                 "Increase correlation threshold",
                 "Try the analysis in smaller batches"
             ],
             "timeoutError": True
-        }, status=408)  # Request Timeout
-    
+        }, status=408)
+
     except Exception as e:
         error_trace = traceback.format_exc()
-        print(f"❌ ERROR in ultra-optimized correlation_network: {str(e)}\n{error_trace}")
+        logger.error(f"Error in correlation_network: {str(e)}", exc_info=True)
         return Response({
             "error": str(e),
             "traceback": error_trace,
@@ -2044,48 +2325,30 @@ def load_example_data(request):
     - JSON data ready for heatmap visualization
     """
     try:
-        # Extract example ID from request
         example_id = request.data.get('example_id')
-        
-        print('===== LOAD EXAMPLE DATA REQUEST =====')
-        print(f'Example ID: {example_id}')
-        print('=' * 40)
-        
-        # Basic validation
+
         if not example_id:
             return Response({"error": "Missing 'example_id'."}, status=400)
-        
-        # Validate example ID format (basic security check)
-        allowed_examples = ['genomics', 'proteomics', 'immunogenomics']
+
+        allowed_examples = ['genomics', 'proteomics', 'immunogenomics', 'gu16257_data', 'mIHC_data']
         if example_id not in allowed_examples:
             return Response({
                 "error": f"Invalid example_id. Allowed values: {allowed_examples}",
                 "provided": example_id
             }, status=400)
-        
-        # Construct file path
+
         file_path = os.path.join(UPLOAD_DIR, f"{example_id}.json")
-        print(f"Looking for file: {file_path}")
-        
-        # Check if file exists
+
         if not os.path.exists(file_path):
             return Response({
                 "error": f"Example dataset not found: {example_id}",
                 "file_path": file_path
             }, status=404)
-        
-        # Check file size for logging
+
         file_size = os.path.getsize(file_path)
-        print(f"File size: {file_size / (1024*1024):.2f} MB")
-        
-        # Load and return the JSON data
-        print(f"📊 Loading example data: {example_id}")
-        
+
         with open(file_path, 'r') as file:
             json_data = json.load(file)
-        
-        print(f"✅ Successfully loaded example data: {example_id}")
-        print(f"📋 Data keys: {list(json_data.keys()) if isinstance(json_data, dict) else 'Not a dict'}")
         
         # Return the data directly
         response_data = {
@@ -2100,25 +2363,25 @@ def load_example_data(request):
     
     except json.JSONDecodeError as e:
         error_message = f"Invalid JSON format in {example_id}.json"
-        print(f"🔥 JSON DECODE ERROR: {error_message} - {str(e)}")
+        logger.error(f"{error_message} - {str(e)}")
         return Response({
             "error": error_message,
             "details": str(e),
             "example_id": example_id
         }, status=500)
-    
-    except FileNotFoundError as e:
+
+    except FileNotFoundError:
         error_message = f"Example dataset file not found: {example_id}"
-        print(f"📁 FILE NOT FOUND: {error_message}")
+        logger.error(error_message)
         return Response({
             "error": error_message,
             "example_id": example_id,
             "file_path": file_path
         }, status=404)
-    
-    except MemoryError as e:
+
+    except MemoryError:
         error_message = f"File too large to load into memory: {example_id}"
-        print(f"💾 MEMORY ERROR: {error_message}")
+        logger.error(error_message)
         return Response({
             "error": error_message,
             "suggestions": [
@@ -2127,11 +2390,11 @@ def load_example_data(request):
                 "Use a smaller dataset for testing"
             ],
             "example_id": example_id
-        }, status=413)  # Payload Too Large
-    
+        }, status=413)
+
     except Exception as e:
         error_trace = traceback.format_exc()
-        print(f"❌ ERROR in load_example_data: {str(e)}\n{error_trace}")
+        logger.error(f"Error in load_example_data: {str(e)}", exc_info=True)
         return Response({
             "error": str(e),
             "traceback": error_trace,
@@ -2339,7 +2602,11 @@ def refresh_heatmap(request):
         # Process data and generate clustering result
         if final_df is not None and not final_df.empty:
             try:
-                clustering_result_str = make_cluster(final_df)
+                # Extract clustering parameters from filters using helper function
+                zscore_axis, dist_type, linkage_type = extract_clustering_params_from_filters(filters)
+
+                # Call make_cluster with all clustering parameters
+                clustering_result_str = make_cluster(final_df, zscore_axis=zscore_axis, dist_type=dist_type, linkage_type=linkage_type)
                 # Parse the clustering result
                 try:
                     clustering_result = json.loads(clustering_result_str)
@@ -2387,7 +2654,6 @@ def fetch_single_library(user_list_id, library):
 # ✅ The view is now a standard synchronous "def"
 @api_view(['POST'])
 def enrich_analysis_view(request):
-    import requests
     import concurrent.futures
 
     genes = request.data.get('genes', [])
@@ -2671,9 +2937,10 @@ def enrich_analysis_view(request):
 
 
 def generate_fallback_response(command):
-    """Generate a fallback response based on command keywords."""
+    """Generate a fallback response based on command keywords.
+    When the command can't be matched, return helpful suggestions."""
     command_lower = command.lower().strip()
-    
+
     # First, check if this is clearly NOT a data analysis command
     non_data_keywords = [
         # Personal information
@@ -2687,29 +2954,71 @@ def generate_fallback_response(command):
         # Other unrelated topics
         "movie", "food", "music", "sports", "news", "politics"
     ]
-    
-    # If command contains clearly non-data analysis keywords, return error
+
+    # If command contains clearly non-data analysis keywords, return error with suggestions
     for keyword in non_data_keywords:
         if keyword in command_lower:
-            return {"error": "unrecognized command"}
+            return {
+                "error": "I can only help with heatmap data analysis commands. Try one of these:",
+                "suggestions": [
+                    "Cluster rows and columns",
+                    "Sort rows by variance",
+                    "Select top 50 variant genes",
+                    "Filter to male patients",
+                    "Search for BRCA1"
+                ]
+            }
     
-    # If command is too short or doesn't contain data analysis keywords, return error
+    # If command is too short or doesn't contain data analysis keywords, return error with suggestions
     if len(command_lower) < 3:
-        return {"error": "unrecognized command"}
-    
+        return {
+            "error": "Command too short. Try being more specific, for example:",
+            "suggestions": ["Cluster rows", "Sort by variance", "Search for TP53"]
+        }
+
+    # Handle "help" / "what can you do" type commands
+    help_keywords = ["help", "commands", "what can", "how to", "how do", "instructions", "guide", "options", "capabilities"]
+    if any(keyword in command_lower for keyword in help_keywords):
+        return {
+            "error": "Here are some things you can do with the heatmap chatbot:",
+            "suggestions": [
+                "Cluster rows and columns",
+                "Sort rows by variance",
+                "Select top 50 variant genes",
+                "Filter to male patients",
+                "Search for BRCA1",
+                "Sort by Sex",
+                "Use cosine distance",
+                "Make it darker",
+                "Show immune pathways"
+            ]
+        }
+
     # Check if command contains at least one data analysis keyword
     data_analysis_keywords = [
-        "cluster", "sort", "order", "arrange", "search", "find", "locate", "filter", 
+        "cluster", "sort", "order", "arrange", "search", "find", "locate", "filter",
         "select", "opacity", "dark", "light", "transparent", "variance", "variant",
-        "row", "column", "gene", "sample", "patient", "male", "female", "sex", 
+        "row", "column", "gene", "sample", "patient", "male", "female", "sex",
         "race", "timepoint", "histology", "sum", "alphabetical", "alpha", "brca",
-        "tp53", "top", "most", "least", "high", "low", "increase", "decrease"
+        "tp53", "top", "most", "least", "high", "low", "increase", "decrease",
+        "normalize", "zscore", "distance", "linkage", "pathway", "expression"
     ]
-    
+
     has_data_keyword = any(keyword in command_lower for keyword in data_analysis_keywords)
-    
+
     if not has_data_keyword:
-        return {"error": "unrecognized command"}
+        return {
+            "error": f"I didn't understand \"{command}\". Try commands like:",
+            "suggestions": [
+                "Cluster rows and columns",
+                "Sort rows by variance",
+                "Select top 100 variant genes",
+                "Filter to female patients",
+                "Search for BRCA1",
+                "Use cosine distance",
+                "Make it darker"
+            ]
+        }
     
     # Now handle commands that clearly relate to data analysis
     
@@ -2727,12 +3036,38 @@ def generate_fallback_response(command):
                 return {"action": "set_opacity", "value": number_match.group(1)}
             # Default opacity action
             return {"action": "set_opacity", "value": "dark"}
-    
+
+    # Handle distance metric commands
+    elif any(word in command_lower for word in ["distance", "metric", "euclidean", "cosine", "correlation", "manhattan", "cityblock"]):
+        # Map distance keywords to actual metric names
+        distance_metrics = {
+            "euclidean": ["euclidean", "l2"],
+            "cosine": ["cosine", "cos"],
+            "correlation": ["correlation", "corr", "pearson"],
+            "cityblock": ["manhattan", "cityblock", "l1"],
+            "chebyshev": ["chebyshev"],
+            "canberra": ["canberra"],
+        }
+
+        # Find which metric was requested
+        for metric, keywords in distance_metrics.items():
+            if any(keyword in command_lower for keyword in keywords):
+                return {"action": "set_distance", "value": metric}
+
+        # Default to euclidean if just "distance" or "metric" mentioned
+        return {"action": "set_distance", "value": "euclidean"}
+
     # Handle clustering commands
     elif "cluster" in command_lower:
-        if any(word in command_lower for word in ["row", "gene", "transcript", "feature"]):
+        has_row = any(word in command_lower for word in ["row", "gene", "transcript", "feature"])
+        has_col = any(word in command_lower for word in ["col", "column", "sample", "patient"])
+        has_both = any(word in command_lower for word in ["both", "everything", "all"]) or (has_row and has_col)
+
+        if has_both or ("and" in command_lower and has_row and has_col):
+            return {"action": "cluster", "target": "both", "value": ""}
+        elif has_row:
             return {"action": "cluster", "target": "rows", "value": ""}
-        elif any(word in command_lower for word in ["col", "column", "sample", "patient"]):
+        elif has_col:
             return {"action": "cluster", "target": "columns", "value": ""}
         else:
             # Default clustering
@@ -2774,8 +3109,8 @@ def generate_fallback_response(command):
             search_term = search_pattern.group(1).strip()
             return {"action": "search", "target": "rows", "value": search_term}
         
-        # If no search term found, return error
-        return {"error": "unrecognized command"}
+        # If no search term found, return error with suggestion
+        return {"error": "Please specify what to search for, e.g.:", "suggestions": ["Search for BRCA1", "Find TP53", "Locate CD8A"]}
     
     # Handle variance commands
     elif "variance" in command_lower or "variant" in command_lower:
@@ -2794,12 +3129,19 @@ def generate_fallback_response(command):
         elif any(word in command_lower for word in ["female", "women", "girl"]):
             return {"action": "sample_filter", "target": "Sex", "value": "Female"}
         else:
-            # If filter command but no recognizable value, return error
-            return {"error": "unrecognized command"}
-    
+            # If filter command but no recognizable value, return error with suggestions
+            return {"error": "Please specify what to filter by, e.g.:", "suggestions": ["Select males", "Filter to responders", "Show alive patients", "Filter by race Asian"]}
+
     # If we get here, the command has data keywords but doesn't match any pattern
-    # This means it's unclear what the user wants
-    return {"error": "unrecognized command"}
+    return {
+        "error": f"I couldn't figure out what to do with \"{command}\". Try rephrasing, for example:",
+        "suggestions": [
+            "Cluster rows and columns",
+            "Sort rows by variance",
+            "Select top 50 variant genes",
+            "Search for BRCA1"
+        ]
+    }
 
 
 def build_prompt(command, command_history=None, filters=None, metadata=None):
@@ -2824,29 +3166,45 @@ def build_prompt(command, command_history=None, filters=None, metadata=None):
         "You are an expert data analysis assistant for exploring biological datasets through heatmap visualizations.\n"
         "Respond STRICTLY and ONLY with a valid JSON object. DO NOT include explanations, comments, or extra text.\n\n"
         
-        "CRITICAL: If the user command is unclear, unrelated to data analysis, or cannot be mapped to any valid action, "
-        "respond with: {\"error\": \"unrecognized command\"}\n\n"
-        
-        "ONLY process commands that are clearly related to:\n"
+        "CRITICAL: Always try to interpret the user's intent. Users may use different terminology, "
+        "synonyms, or phrasing (e.g., 'y axis' means rows, 'x axis' means columns). "
+        "ALWAYS try to map the command to the closest valid action. For example:\n"
+        "  - 'find xyz' → search action with value 'xyz' (even if 'xyz' seems unlikely as a gene name)\n"
+        "  - 'show pathways' → pathway_search action\n"
+        "  - 'what commands do you have' → return a helpful error with suggestions\n"
+        "ONLY return an error if the command is completely unrelated to data analysis "
+        "(e.g., 'what is the weather', 'tell me a joke', 'my name is John').\n"
+        "When in doubt, pick the CLOSEST matching action rather than returning an error.\n\n"
+
+        "Process commands related to:\n"
         "- Data filtering, sorting, clustering, searching\n"
-        "- Heatmap visualization adjustments\n"
+        "- Heatmap visualization adjustments (opacity, distance metrics)\n"
+        "- Data normalization (z-score)\n"
+        "- Clustering parameters (distance metrics)\n"
         "- Sample or gene selection\n"
         "- Pathway and transcription factor analysis\n\n"
-        
-        "DO NOT try to interpret unclear commands. DO NOT force-fit unrelated text into valid actions.\n\n"
-        
-        "Valid Actions (ONLY use these if the command clearly matches):\n"
-        "  - 'sort'          : Sort rows or columns. Valid 'value' options: 'alphabetical', 'sum', 'variance'.\n"
-        "  - 'sort_by_meta'  : Sort rows or columns by a metadata category. 'target' is 'rows' or 'columns', 'value' is the metadata category.\n"
-        "  - 'cluster'       : Perform clustering on rows or columns.\n"
-        "  - 'search'        : Search for a specific gene or biomarker. 'value' should be the search term.\n"
-        "  - 'sample_filter' : Filter samples based on metadata. 'target' is the metadata field, 'value' is the filter value.\n"
-        "  - 'gene_filter'   : Filter rows/genes based on metadata. 'target' is the metadata field, 'value' is the filter value.\n"
-        "  - 'variance'      : Select top N most variable rows or columns. 'value' should be the number of top features.\n"
-        "  - 'set_opacity'   : Change the opacity/intensity of the heatmap. 'value' should be a number between 0.5 and 3.0 or 'dark'/'light'.\n"
-        "  - 'pathway_filter'    : Filter genes by specific pathway name OR transcription factor. 'value' is the exact pathway name or TF name.\n"
-        "  - 'pathway_search'    : List available pathways by category. 'value' is the category (immune, cancer, etc.).\n"
-        "  - 'functional_filter' : Filter genes by biological function. 'value' is the function name.\n\n"
+
+        "Valid Actions:\n"
+        "  - 'sort'             : Sort rows or columns. Valid 'value' options: 'alphabetical', 'sum', 'variance'.\n"
+        "  - 'sort_by_meta'     : Sort/group/cluster rows or columns BY A METADATA FIELD. Use when user says 'sort by X', 'cluster by X', 'group by X' where X is a metadata field like Sex, Timepoint, Response, Gene Type, etc. 'target' is 'rows' or 'columns', 'value' is the metadata category name.\n"
+        "  - 'sort_by_expression': Sort samples/columns by expression of a specific gene. 'target' is 'columns', 'value' is the gene name (e.g., 'FASLG').\n"
+        "  - 'cluster'          : Perform hierarchical clustering. 'y axis'/'vertical'/'genes'/'proteins' = rows. 'x axis'/'horizontal'/'samples' = columns. 'cluster y axis' means target='rows'.\n"
+        "  - 'search'           : Search for a specific gene or biomarker. 'value' should be the search term.\n"
+        "  - 'sample_filter'    : Filter samples based on SINGLE metadata condition. 'target' is the metadata field, 'value' is the filter value.\n"
+        "  - 'gene_filter'      : Filter rows/genes based on metadata. 'target' is the metadata field, 'value' is the filter value.\n"
+        "  - 'multi_filter'     : Filter samples by MULTIPLE conditions (AND logic). Use when user specifies 2+ criteria. 'filters' is an array of {target, value} objects.\n"
+        "  - 'exclude_filter'   : EXCLUDE/REMOVE samples matching criteria. Use for 'remove', 'exclude', 'not', 'without' commands. 'target' and 'value' specify what to exclude.\n"
+        "  - 'multi_exclude'    : EXCLUDE samples matching MULTIPLE criteria (AND logic). 'filters' is an array of {target, value} objects to exclude.\n"
+        "  - 'clear_filters'    : Reset/clear all applied filters. Use for 'reset', 'clear', 'show all', 'remove filters' commands.\n"
+        "  - 'variance'         : Select top N most variable rows or columns. 'value' should be the number of top features.\n"
+        "  - 'set_opacity'      : Change the opacity/intensity of the heatmap. 'value' should be a number between 0.5 and 3.0 or 'dark'/'light'.\n"
+        "  - 'set_distance'     : Change the distance metric for clustering. Valid 'value' options: 'euclidean', 'cosine', 'correlation', 'cityblock', 'pearson', 'manhattan'.\n"
+        "  - 'set_linkage'      : Change the linkage method for hierarchical clustering. Valid 'value' options: 'average', 'complete', 'single', 'ward'.\n"
+        "  - 'set_clustering'   : Set BOTH distance metric AND linkage method in one command. Use 'distance' for metric and 'linkage' for method. Example: {\"action\": \"set_clustering\", \"distance\": \"correlation\", \"linkage\": \"average\"}.\n"
+        "  - 'zscore'           : Apply z-score normalization to rows or columns. 'target' should be 'rows' or 'cols'.\n"
+        "  - 'pathway_filter'   : Filter genes by specific pathway name OR transcription factor. 'value' is the exact pathway name or TF name.\n"
+        "  - 'pathway_search'   : List available pathways by category. 'value' is the category (immune, cancer, etc.).\n"
+        "  - 'functional_filter': Filter genes by biological function. 'value' is the function name.\n\n"
     )
 
         
@@ -2912,21 +3270,78 @@ def build_prompt(command, command_history=None, filters=None, metadata=None):
     prompt += f"""
 COMMON COMMAND PATTERNS:
 
-Filtering/Selection Commands:
+Filtering/Selection Commands (SINGLE filter):
 "select males" → {{ "action": "sample_filter", "target": "Sex", "value": "Male" }}
-"select females" → {{ "action": "sample_filter", "target": "Sex", "value": "Female" }}  
+"select females" → {{ "action": "sample_filter", "target": "Sex", "value": "Female" }}
 "filter by race asian" → {{ "action": "sample_filter", "target": "Race", "value": "Asian" }}
 "show only alive patients" → {{ "action": "sample_filter", "target": "Survival", "value": "Alive" }}
+"show responders" → {{ "action": "sample_filter", "target": "Response", "value": "Responder" }}
+"filter to C1D1 timepoint" → {{ "action": "sample_filter", "target": "Timepoint", "value": "C1D1" }}
 
-Sorting Commands:
+COMBINED/MULTI-FILTER Commands (use multi_filter when 2+ conditions are mentioned):
+"select male responders" → {{ "action": "multi_filter", "filters": [{{"target": "Sex", "value": "Male"}}, {{"target": "Response", "value": "Responder"}}] }}
+"show female non-responders" → {{ "action": "multi_filter", "filters": [{{"target": "Sex", "value": "Female"}}, {{"target": "Response", "value": "Non-responder"}}] }}
+"filter to male responders at C1D1" → {{ "action": "multi_filter", "filters": [{{"target": "Sex", "value": "Male"}}, {{"target": "Response", "value": "Responder"}}, {{"target": "Timepoint", "value": "C1D1"}}] }}
+"female patients at C3D1 timepoint" → {{ "action": "multi_filter", "filters": [{{"target": "Sex", "value": "Female"}}, {{"target": "Timepoint", "value": "C3D1"}}] }}
+"show responders at baseline" → {{ "action": "multi_filter", "filters": [{{"target": "Response", "value": "Responder"}}, {{"target": "Timepoint", "value": "C1D1"}}] }}
+"male non-responders at C8D1" → {{ "action": "multi_filter", "filters": [{{"target": "Sex", "value": "Male"}}, {{"target": "Response", "value": "Non-responder"}}, {{"target": "Timepoint", "value": "C8D1"}}] }}
+
+EXCLUDE/REMOVE Commands (use exclude_filter or multi_exclude):
+"remove males" → {{ "action": "exclude_filter", "target": "Sex", "value": "Male" }}
+"exclude females" → {{ "action": "exclude_filter", "target": "Sex", "value": "Female" }}
+"exclude C1D1 timepoint" → {{ "action": "exclude_filter", "target": "Timepoint", "value": "C1D1" }}
+"remove non-responders" → {{ "action": "exclude_filter", "target": "Response", "value": "Non-responder" }}
+"exclude male non-responders" → {{ "action": "multi_exclude", "filters": [{{"target": "Sex", "value": "Male"}}, {{"target": "Response", "value": "Non-responder"}}] }}
+"remove females at C1D1" → {{ "action": "multi_exclude", "filters": [{{"target": "Sex", "value": "Female"}}, {{"target": "Timepoint", "value": "C1D1"}}] }}
+
+CLEAR/RESET Commands:
+"clear all filters" → {{ "action": "clear_filters" }}
+"reset filters" → {{ "action": "clear_filters" }}
+"show all samples" → {{ "action": "clear_filters" }}
+"remove all filters" → {{ "action": "clear_filters" }}
+"start over" → {{ "action": "clear_filters" }}
+
+Sorting Commands (reorder ALL rows/columns - does NOT filter data):
 "sort rows by variance" → {{ "action": "sort", "target": "rows", "value": "variance" }}
+"sort proteins by variance" → {{ "action": "sort", "target": "rows", "value": "variance" }}
+"sort genes by variance" → {{ "action": "sort", "target": "rows", "value": "variance" }}
+"sort markers by variance" → {{ "action": "sort", "target": "rows", "value": "variance" }}
+"sort rows alphabetically" → {{ "action": "sort", "target": "rows", "value": "alphabetical" }}
+"sort columns by sum" → {{ "action": "sort", "target": "columns", "value": "sum" }}
 "sort by sex" → {{ "action": "sort_by_meta", "target": "columns", "value": "Sex" }}
 "sort samples by timepoint" → {{ "action": "sort_by_meta", "target": "columns", "value": "Timepoint" }}
 
-Clustering Commands:
+CRITICAL: "sort by variance" vs "top N variance":
+- "sort proteins by variance" → {{ "action": "sort", "target": "rows", "value": "variance" }} (reorders ALL rows)
+- "top 50 proteins" or "show top 50 variant" → {{ "action": "variance", "target": "rows", "value": "50" }} (FILTERS to top N)
+
+Clustering Commands (hierarchical clustering - NO metadata field):
 "cluster rows" → {{ "action": "cluster", "target": "rows", "value": "" }}
 "cluster genes" → {{ "action": "cluster", "target": "rows", "value": "" }}
+"cluster y axis" → {{ "action": "cluster", "target": "rows", "value": "" }}
+"cluster by y axis" → {{ "action": "cluster", "target": "rows", "value": "" }}
+"cluster vertical" → {{ "action": "cluster", "target": "rows", "value": "" }}
 "cluster samples" → {{ "action": "cluster", "target": "columns", "value": "" }}
+"cluster columns" → {{ "action": "cluster", "target": "columns", "value": "" }}
+"cluster x axis" → {{ "action": "cluster", "target": "columns", "value": "" }}
+"cluster by x axis" → {{ "action": "cluster", "target": "columns", "value": "" }}
+"cluster horizontal" → {{ "action": "cluster", "target": "columns", "value": "" }}
+"cluster rows and columns" → {{ "action": "cluster", "target": "both", "value": "" }}
+"cluster both" → {{ "action": "cluster", "target": "both", "value": "" }}
+"cluster everything" → {{ "action": "cluster", "target": "both", "value": "" }}
+"cluster all" → {{ "action": "cluster", "target": "both", "value": "" }}
+
+CRITICAL DISTINCTION - "cluster by X" vs "cluster rows/columns":
+"cluster by Timepoint" → {{ "action": "sort_by_meta", "target": "columns", "value": "Timepoint" }}
+"cluster by Sex" → {{ "action": "sort_by_meta", "target": "columns", "value": "Sex" }}
+"cluster by Response" → {{ "action": "sort_by_meta", "target": "columns", "value": "Response" }}
+"group by Timepoint" → {{ "action": "sort_by_meta", "target": "columns", "value": "Timepoint" }}
+"cluster columns by Gender" → {{ "action": "sort_by_meta", "target": "columns", "value": "Gender" }}
+"cluster columns by Sex" → {{ "action": "sort_by_meta", "target": "columns", "value": "Sex" }}
+"cluster rows by Gene Type" → {{ "action": "sort_by_meta", "target": "rows", "value": "Gene Type" }}
+"cluster samples by Timepoint" → {{ "action": "sort_by_meta", "target": "columns", "value": "Timepoint" }}
+"group columns by Response" → {{ "action": "sort_by_meta", "target": "columns", "value": "Response" }}
+NOTE: When user says "cluster by X", "cluster columns by X", "cluster rows by X", "group by X" where X is a metadata field, use sort_by_meta NOT cluster!
 
 Search Commands:
 "search for BRCA1" → {{ "action": "search", "target": "rows", "value": "BRCA1" }}
@@ -2937,9 +3352,75 @@ Visualization Commands:
 "increase opacity" → {{ "action": "set_opacity", "value": "dark" }}
 "set opacity to 2.0" → {{ "action": "set_opacity", "value": "2.0" }}
 
-Variance Selection:
+Normalization Commands:
+"zscore: rows" → {{ "action": "zscore", "target": "rows", "value": "" }}
+"zscore: cols" → {{ "action": "zscore", "target": "cols", "value": "" }}
+"normalize rows" → {{ "action": "zscore", "target": "rows", "value": "" }}
+"normalize columns" → {{ "action": "zscore", "target": "cols", "value": "" }}
+
+Distance Metric Commands:
+"use euclidean distance" → {{ "action": "set_distance", "value": "euclidean" }}
+"use cosine distance" → {{ "action": "set_distance", "value": "cosine" }}
+"use correlation distance" → {{ "action": "set_distance", "value": "correlation" }}
+"use pearson distance" → {{ "action": "set_distance", "value": "correlation" }}
+"use manhattan distance" → {{ "action": "set_distance", "value": "cityblock" }}
+"change distance to euclidean" → {{ "action": "set_distance", "value": "euclidean" }}
+"cluster using Pearson correlation" → {{ "action": "set_distance", "value": "correlation" }}
+"cluster using cosine" → {{ "action": "set_distance", "value": "cosine" }}
+"cluster with euclidean" → {{ "action": "set_distance", "value": "euclidean" }}
+"apply correlation distance" → {{ "action": "set_distance", "value": "correlation" }}
+
+NOTE: "Pearson correlation", "correlation", "pearson" all map to "correlation" distance.
+"cluster using X", "cluster with X", "use X distance" all mean set_distance.
+
+Linkage Method Commands:
+"use average linkage" → {{ "action": "set_linkage", "value": "average" }}
+"use complete linkage" → {{ "action": "set_linkage", "value": "complete" }}
+"use single linkage" → {{ "action": "set_linkage", "value": "single" }}
+"use ward linkage" → {{ "action": "set_linkage", "value": "ward" }}
+"change linkage to complete" → {{ "action": "set_linkage", "value": "complete" }}
+"set linkage method to average" → {{ "action": "set_linkage", "value": "average" }}
+
+Combined Clustering Parameters (set BOTH distance AND linkage in one command):
+"cluster using Pearson correlation and average linkage" → {{ "action": "set_clustering", "distance": "correlation", "linkage": "average" }}
+"cluster with euclidean distance and complete linkage" → {{ "action": "set_clustering", "distance": "euclidean", "linkage": "complete" }}
+"use cosine distance with ward linkage" → {{ "action": "set_clustering", "distance": "cosine", "linkage": "ward" }}
+"cluster genes using correlation and single linkage" → {{ "action": "set_clustering", "distance": "correlation", "linkage": "single" }}
+
+NOTE: Use "set_clustering" when BOTH distance AND linkage are mentioned in the same command.
+Use "set_distance" or "set_linkage" when only ONE is mentioned.
+
+Sort by Expression Commands (sort columns by a GENE's expression values):
+"sort samples by FASLG expression" → {{ "action": "sort_by_expression", "target": "columns", "value": "FASLG" }}
+"sort columns by TP53" → {{ "action": "sort_by_expression", "target": "columns", "value": "TP53" }}
+"order samples by BRCA1 expression" → {{ "action": "sort_by_expression", "target": "columns", "value": "BRCA1" }}
+"sort by CD8A" → {{ "action": "sort_by_expression", "target": "columns", "value": "CD8A" }}
+
+CRITICAL RULE FOR "sort by X" COMMANDS:
+- FIRST check if X matches ANY metadata field name listed above (Sex, Timepoint, Response, etc.)
+- If X IS a metadata field → use "sort_by_meta"
+- If X is NOT a metadata field → use "sort_by_expression" (assume it's a gene/marker name)
+- The backend will validate if the gene exists. Your job is just to route correctly.
+- Example: "sort by HGF" - HGF is not a metadata field, so use sort_by_expression with value "HGF"
+
+Sort/Group by Metadata Commands (all variations map to sort_by_meta):
+"sort by Sex" → {{ "action": "sort_by_meta", "target": "columns", "value": "Sex" }}
+"cluster by Gender" → {{ "action": "sort_by_meta", "target": "columns", "value": "Gender" }}
+"group samples by Timepoint" → {{ "action": "sort_by_meta", "target": "columns", "value": "Timepoint" }}
+"sort samples by Response" → {{ "action": "sort_by_meta", "target": "columns", "value": "Response" }}
+"cluster rows by Gene Type" → {{ "action": "sort_by_meta", "target": "rows", "value": "Gene Type" }}
+"group genes by Pathway" → {{ "action": "sort_by_meta", "target": "rows", "value": "Pathway" }}
+
+Variance Selection (select top N most variable/variant rows):
 "top 50 genes" → {{ "action": "variance", "target": "rows", "value": "50" }}
 "most variable 100 rows" → {{ "action": "variance", "target": "rows", "value": "100" }}
+"show top 50 variant proteins" → {{ "action": "variance", "target": "rows", "value": "50" }}
+"top 100 variable markers" → {{ "action": "variance", "target": "rows", "value": "100" }}
+"show top 25 variant genes" → {{ "action": "variance", "target": "rows", "value": "25" }}
+"filter to top 200 most variable" → {{ "action": "variance", "target": "rows", "value": "200" }}
+
+NOTE: "variant", "variable", "varying" all mean the same - select by variance.
+"proteins", "markers", "genes", "features", "rows" all refer to rows.
 
 PATHWAY & TRANSCRIPTION FACTOR COMMANDS:
 
@@ -3031,10 +3512,10 @@ VALIDATION PROCESS:
 
 4. Command "my name is john":
    - Is this data analysis? NO
-   - Return: {{"error": "unrecognized command"}}
+   - Return: {{"error": "I can only help with heatmap data analysis commands.", "suggestions": ["Cluster rows and columns", "Sort rows by variance", "Search for BRCA1"]}}
 
-ERROR CASES:
-{{"error": "unrecognized command"}} // For non-data analysis commands
+ERROR CASES (ALWAYS include helpful suggestions):
+{{"error": "I can only help with heatmap data analysis commands.", "suggestions": ["Cluster rows", "Sort by variance", "Search for TP53"]}} // For non-data analysis commands
 {{"error": "value not found: 'XYZ' not available in FieldName. Available values: A, B, C"}} // When requested value doesn't exist
 
 CRITICAL: Always use EXACT field names from the metadata. Pay attention to capitalization.
@@ -3080,10 +3561,9 @@ def detect_matrix_start(df) -> tuple:
             matrix_start_row = row_idx
             break
     
-    # Default fallback for matrix_start_row
     if matrix_start_row is None:
         matrix_start_row = min(10, df.shape[0] - 1)
-        print(f"Warning: Could not detect matrix start row, defaulting to {matrix_start_row}")
+        logger.warning(f"Could not detect matrix start row, defaulting to {matrix_start_row}")
     
     # Step 2: Find the first column that contains mostly numeric values in the data rows
     if matrix_start_row is not None:
@@ -3114,12 +3594,10 @@ def detect_matrix_start(df) -> tuple:
                 matrix_start_col = col_idx
                 break
     
-    # Default fallback for matrix_start_col
     if matrix_start_col is None:
         matrix_start_col = 0
-        print(f"Warning: Could not detect matrix start column, defaulting to {matrix_start_col}")
-    
-    print(f"Detected matrix start: row={matrix_start_row}, col={matrix_start_col}")
+        logger.warning(f"Could not detect matrix start column, defaulting to {matrix_start_col}")
+
     return matrix_start_row, matrix_start_col
 
 # def apply_filters(df: pd.DataFrame, filters: dict) -> pd.DataFrame:
@@ -3129,64 +3607,35 @@ def apply_filters(df, filters,session_id=None):
     import numpy as np
 
     try:
-        print("📢 apply_filters called!")
-        print('******** filter is as follows ******', filters)
-        
         if not filters or (not filters.get("row") and not filters.get("col")):
-            print("No filters to apply, returning original DataFrame")
             return df
-        
-        # Create a copy and preserve the original column names
+
         filtered_df = df.copy()
         original_columns = filtered_df.columns.tolist()
-        
-        # Detect matrix start
+
         matrix_start_row, matrix_start_col = detect_matrix_start(filtered_df)
-        print(f"📌 matrix_start_row: {matrix_start_row}")
-        print(f"📌 matrix_start_col: {matrix_start_col}")
-        
-        # Separate metadata and data sections
+
         metadata_rows = filtered_df.iloc[:matrix_start_row, :]
         metadata_cols = filtered_df.iloc[matrix_start_row:, :matrix_start_col]
         data_matrix = filtered_df.iloc[matrix_start_row:, matrix_start_col:]
-        
-        print(f"Data matrix shape: {data_matrix.shape}")
-        print(f"First few values of data matrix:\n{data_matrix.iloc[:3, :3]}")
-        
-        # Ensure data matrix is numeric for calculations
+
         data_matrix = data_matrix.apply(pd.to_numeric, errors='coerce')
-        
-        # ✅ Apply Row Filters (e.g., variance)
-        # filtered_row_indices = data_matrix.index.tolist()  # Start with all indices
-        filtered_row_indices = set(data_matrix.index)  # ✅ set
+        filtered_row_indices = set(data_matrix.index)
 
         for f in filters.get("row", []):
-            print(f"📢 Applying row filter: {f}")
             if f.get("type") == "variance":
                 top_n = int(f.get("top_n", 100))
-
-                # Compute variance safely
                 variances = data_matrix.replace([np.inf, -np.inf], np.nan).dropna(how='all').var(axis=1)
                 if not variances.empty:
-                    print(f"Variance range: {variances.min()} to {variances.max()}")
                     top_indices = variances.nlargest(min(top_n, len(variances))).index.tolist()
-
                     if top_indices:
-                        print(f"✅ Selected top {len(top_indices)} high-variance rows")
                         filtered_row_indices = filtered_row_indices & set(top_indices)
-                    else:
-                        print("⚠️ No rows meet variance threshold")
-                else:
-                    print("⚠️ No valid rows for variance computation")
 
             elif f.get("type") == "gene_filter":
                 field = f.get("field")
                 value = f.get("value")
                 if not field or not value:
-                    print(f"⚠️ Missing field/value in gene_filter: {f}")
                     continue
-
-                print(f"Looking for rows with metadata '{field}:{value}'")
                 field_lower = field.lower()
                 value_lower = value.lower()
 
@@ -3194,151 +3643,145 @@ def apply_filters(df, filters,session_id=None):
                 for row_idx in range(matrix_start_row, filtered_df.shape[0]):
                     index_val = filtered_df.index[row_idx]
                     if index_val not in filtered_row_indices:
-                        continue  # Skip if this row was filtered out earlier
+                        continue
 
-                    # Check each metadata column for this row
                     for col_idx in range(matrix_start_col):
                         cell_value = str(filtered_df.iloc[row_idx, col_idx]).strip()
-                        print(f"Checking row {row_idx}, col {col_idx}: '{cell_value}'")
-                        
                         match_found = False
-                        
-                        # Only match if cell contains colon
+
                         if ":" in cell_value:
-                            # Split on first colon only
                             parts = cell_value.split(":", 1)
                             if len(parts) == 2:
                                 cell_field = parts[0].strip().lower()
                                 cell_value_part = parts[1].strip().lower()
-                                
-                                # Exact match for both field and value
                                 if cell_field == field_lower and cell_value_part == value_lower:
                                     match_found = True
-                                    print(f"✅ ROW MATCH: '{cell_field}:{cell_value_part}' matches '{field_lower}:{value_lower}'")
                                     break
-                        
+
                     if match_found:
                         matching_rows.append(index_val)
-                        break  # Found match in this row, move to next row
+                        break
 
                 if matching_rows:
-                    print(f"✅ Found {len(matching_rows)} matching rows for '{field}:{value}'")
                     filtered_row_indices = filtered_row_indices & set(matching_rows)
-                else:
-                    print(f"⚠️ No matching rows found for '{field}:{value}'")
                     
         # Apply final filtered rows
         if filtered_row_indices:
             data_matrix = data_matrix.loc[list(filtered_row_indices)]
             metadata_cols = metadata_cols.loc[list(filtered_row_indices)]
 
-        # ✅ Apply Column Filters (Sample Metadata)
+        # Apply Column Filters (Sample Metadata)
         for f in filters.get("col", []):
-            print(f"📢 Applying column filter: {f}")
             if f.get("type") == "sample_filter":
                 field = f.get("field")
                 value = f.get("value")
-                
+
                 if not field or not value:
-                    print(f"⚠️ Warning: Missing field or value in filter: {f}")
                     continue
-                
-                print(f"Looking for samples with {field}:{value}")
-                
-                # Check if we have NaN metadata rows
+
                 all_nan_metadata = metadata_rows.isna().all().all()
                 if all_nan_metadata:
-                    print("⚠️ Warning: All metadata rows are NaN, using original file headers")
-                    # Load the original file again to get text headers
                     try:
                         orig_file_path = os.path.join(UPLOAD_DIR, f"{session_id}.tsv")
                         header_df = pd.read_csv(orig_file_path, sep="\t", nrows=matrix_start_row)
                         metadata_rows = header_df
                     except Exception as e:
-                        print(f"⚠️ Warning: Could not load original file headers: {e}")
-                
-                # Look for the field in the metadata rows
+                        logger.warning(f"Could not load original file headers: {e}")
+
                 field_row = None
                 for idx in range(metadata_rows.shape[0]):
                     row_values = metadata_rows.iloc[idx, :].astype(str)
-                    # Check for exact field match or field: prefix
                     if any(field == val.strip() or val.strip().startswith(f"{field}:") for val in row_values):
                         field_row = idx
                         break
-                
+
                 if field_row is None:
-                    print(f"⚠️ Warning: Could not find metadata field '{field}' in rows")
                     continue
-                
-                print(f"Found field '{field}' in row {field_row}")
-                
-                # Look for matching columns based on field and value
+
                 matching_cols = []
-                
-                # Convert field and value to lowercase for case-insensitive matching
                 field_lower = field.lower()
                 value_lower = value.lower()
-                
+
                 for col_idx in range(matrix_start_col, metadata_rows.shape[1]):
                     cell_value = str(metadata_rows.iloc[field_row, col_idx]).strip()
-                    print(f"Checking column {col_idx}: '{cell_value}'")
-                    
                     match_found = False
-                    
-                    # Only match if cell contains colon
+
                     if ":" in cell_value:
-                        # Split on first colon only
                         parts = cell_value.split(":", 1)
                         if len(parts) == 2:
                             cell_field = parts[0].strip().lower()
                             cell_value_part = parts[1].strip().lower()
-                            
-                            # Exact match for both field and value
                             if cell_field == field_lower and cell_value_part == value_lower:
                                 match_found = True
-                                print(f"✅ COLUMN MATCH: '{cell_field}:{cell_value_part}' matches '{field_lower}:{value_lower}'")
-                            else:
-                                print(f"❌ No match: '{cell_field}:{cell_value_part}' != '{field_lower}:{value_lower}'")
-                    else:
-                        print(f"❌ No colon found in '{cell_value}' - skipping")
-                    
+
                     if match_found:
                         matching_cols.append(col_idx)
-                
+
                 if matching_cols:
-                    # Get column labels for the matching columns
                     valid_sample_labels = [filtered_df.columns[col_idx] for col_idx in matching_cols]
-                    print(f"Found {len(valid_sample_labels)} columns matching '{value}' for field '{field}'")
-                    
-                    # Filter the data matrix to include only these columns
                     common_cols = list(set(data_matrix.columns) & set(valid_sample_labels))
-                    if not common_cols:
-                        print("⚠️ Warning: No common columns left after this filter")
-                    else:
-                        print(f"Filtering to {len(common_cols)} columns")
+                    if common_cols:
                         data_matrix = data_matrix.loc[:, common_cols]
-                else:
-                    print(f"⚠️ Warning: No columns found matching '{value}' for field '{field}'")
+
+            elif f.get("type") == "exclude_filter":
+                field = f.get("field")
+                value = f.get("value")
+
+                if not field or not value:
+                    continue
+
+                all_nan_metadata = metadata_rows.isna().all().all()
+                if all_nan_metadata:
+                    try:
+                        orig_file_path = os.path.join(UPLOAD_DIR, f"{session_id}.tsv")
+                        header_df = pd.read_csv(orig_file_path, sep="\t", nrows=matrix_start_row)
+                        metadata_rows = header_df
+                    except Exception as e:
+                        logger.warning(f"Could not load original file headers: {e}")
+
+                field_row = None
+                for idx in range(metadata_rows.shape[0]):
+                    row_values = metadata_rows.iloc[idx, :].astype(str)
+                    if any(field == val.strip() or val.strip().startswith(f"{field}:") for val in row_values):
+                        field_row = idx
+                        break
+
+                if field_row is None:
+                    continue
+
+                cols_to_exclude = []
+                field_lower = field.lower()
+                value_lower = value.lower()
+
+                for col_idx in range(matrix_start_col, metadata_rows.shape[1]):
+                    cell_value = str(metadata_rows.iloc[field_row, col_idx]).strip()
+                    match_found = False
+
+                    if ":" in cell_value:
+                        parts = cell_value.split(":", 1)
+                        if len(parts) == 2:
+                            cell_field = parts[0].strip().lower()
+                            cell_value_part = parts[1].strip().lower()
+                            if cell_field == field_lower and cell_value_part == value_lower:
+                                match_found = True
+
+                    if match_found:
+                        cols_to_exclude.append(col_idx)
+
+                if cols_to_exclude:
+                    exclude_labels = [filtered_df.columns[col_idx] for col_idx in cols_to_exclude]
+                    remaining_cols = [col for col in data_matrix.columns if col not in exclude_labels]
+                    if remaining_cols:
+                        data_matrix = data_matrix.loc[:, remaining_cols]
         
-        # Check if we still have data after filtering
         if data_matrix.empty:
-            print("⚠️ Warning: No data remains after applying all filters")
-            return df  # Return original if all data was filtered out
-        
-        print(f"Final data matrix shape after filtering: {data_matrix.shape}")
-        print(data_matrix)
-        
-        # ✅ Reconstruct Final DataFrame
-        # First combine the metadata columns with filtered data matrix
+            logger.warning("No data remains after applying all filters")
+            return df
+
         if len(metadata_cols) != len(data_matrix):
-            print(f"⚠️ Warning: Length mismatch between metadata_cols ({len(metadata_cols)}) and data_matrix ({len(data_matrix)})")
-            # Align the metadata_cols to match data_matrix
             metadata_cols = metadata_cols.loc[data_matrix.index]
 
-        print(metadata_cols)
-        
         result_data = pd.concat([metadata_cols, data_matrix], axis=1)
-        print(result_data)
 
         # Then prepare metadata rows to align with filtered columns
         metadata_rows_filtered = metadata_rows.copy()
@@ -3392,10 +3835,8 @@ def apply_filters(df, filters,session_id=None):
         return final_df
     
     except Exception as e:
-        print("❌ Error in apply_filters:", str(e))
-        import traceback
-        print(traceback.format_exc())
-        return df  # Return original data on error
+        logger.error(f"Error in apply_filters: {str(e)}", exc_info=True)
+        return df
 
     
 def update_filters(filters: dict, action: str, target: str, value: str) -> dict:
@@ -3489,7 +3930,7 @@ def update_filters(filters: dict, action: str, target: str, value: str) -> dict:
                 }
                 field_filter_exists = True
                 break
-        
+
         # If no filter for this field exists, add a new one
         if not field_filter_exists:
             updated_filters.setdefault("row", []).append({
@@ -3497,9 +3938,114 @@ def update_filters(filters: dict, action: str, target: str, value: str) -> dict:
                 "field": target,
                 "min": float(value)
             })
-    
+
     # 🚀 Add more action types here as needed (e.g., 'cluster', 'sort', etc.)
-    
+
+    return updated_filters
+
+
+def update_filters_multi(filters: dict, action: str, filter_list: list = None, target: str = None, value: str = None) -> dict:
+    """
+    Update filters for multi_filter, exclude_filter, multi_exclude, and clear_filters actions.
+
+    Args:
+        filters (dict): Current filters with 'row' and 'col' keys.
+        action (str): Action type ('multi_filter', 'exclude_filter', 'multi_exclude', 'clear_filters').
+        filter_list (list): List of filter objects for multi_filter/multi_exclude actions.
+        target (str): Target field for single exclude_filter.
+        value (str): Value for single exclude_filter.
+
+    Returns:
+        dict: Updated filters dictionary.
+    """
+    updated_filters = copy.deepcopy(filters)
+
+    if action == "clear_filters":
+        # Clear all filters - reset to empty
+        return {"row": [], "col": []}
+
+    elif action == "multi_filter":
+        # Add multiple sample filters (AND logic)
+        if filter_list:
+            for filter_obj in filter_list:
+                filter_target = filter_obj.get("target")
+                filter_value = filter_obj.get("value")
+
+                if filter_target and filter_value:
+                    # Check if filter for this field already exists
+                    field_filter_exists = False
+                    for i, existing_filter in enumerate(updated_filters.get("col", [])):
+                        if existing_filter.get("type") == "sample_filter" and existing_filter.get("field") == filter_target:
+                            # Replace existing filter for this field
+                            updated_filters["col"][i] = {
+                                "type": "sample_filter",
+                                "field": filter_target,
+                                "value": filter_value
+                            }
+                            field_filter_exists = True
+                            break
+
+                    # If no filter for this field exists, add new one
+                    if not field_filter_exists:
+                        updated_filters.setdefault("col", []).append({
+                            "type": "sample_filter",
+                            "field": filter_target,
+                            "value": filter_value
+                        })
+
+    elif action == "exclude_filter":
+        # Add a single exclude filter
+        if target and value:
+            # Check if exclude filter for this field already exists
+            field_filter_exists = False
+            for i, existing_filter in enumerate(updated_filters.get("col", [])):
+                if existing_filter.get("type") == "exclude_filter" and existing_filter.get("field") == target:
+                    # Replace existing exclude filter for this field
+                    updated_filters["col"][i] = {
+                        "type": "exclude_filter",
+                        "field": target,
+                        "value": value
+                    }
+                    field_filter_exists = True
+                    break
+
+            # If no exclude filter for this field exists, add new one
+            if not field_filter_exists:
+                updated_filters.setdefault("col", []).append({
+                    "type": "exclude_filter",
+                    "field": target,
+                    "value": value
+                })
+
+    elif action == "multi_exclude":
+        # Add multiple exclude filters (AND logic - exclude samples matching ALL criteria)
+        if filter_list:
+            for filter_obj in filter_list:
+                filter_target = filter_obj.get("target")
+                filter_value = filter_obj.get("value")
+
+                if filter_target and filter_value:
+                    # Check if exclude filter for this field already exists
+                    field_filter_exists = False
+                    for i, existing_filter in enumerate(updated_filters.get("col", [])):
+                        if existing_filter.get("type") == "exclude_filter" and existing_filter.get("field") == filter_target:
+                            # Replace existing exclude filter for this field
+                            updated_filters["col"][i] = {
+                                "type": "exclude_filter",
+                                "field": filter_target,
+                                "value": filter_value
+                            }
+                            field_filter_exists = True
+                            break
+
+                    # If no exclude filter for this field exists, add new one
+                    if not field_filter_exists:
+                        updated_filters.setdefault("col", []).append({
+                            "type": "exclude_filter",
+                            "field": filter_target,
+                            "value": filter_value
+                        })
+
     return updated_filters
 
 
@@ -3513,20 +4059,15 @@ def is_number(value):
     except (ValueError, TypeError):
         return False
 
-def extract_and_save_metadata(tsv_file_path: str, metadata_json_path: str):
-    """Extract distinct metadata values for each category from a TSV file and save as JSON."""
+def extract_and_save_metadata(df, metadata_json_path: str):
+    """Extract distinct metadata values for each category and save as JSON.
+
+    Args:
+        df: DataFrame with the data (already loaded)
+        metadata_json_path: Path to save the metadata JSON
+    """
     import pandas as pd
 
-    # Read the TSV file
-    print(f"Reading TSV file: {tsv_file_path}")
-    df = pd.read_csv(tsv_file_path, sep="\t", header=None)
-    print(f"DataFrame shape: {df.shape}")
-    
-    # Print the first few rows to debug
-    print("First 5 rows:")
-    for i in range(min(5, df.shape[0])):
-        print(f"Row {i}: {df.iloc[i].tolist()[:5]}...")
-    
     # ✅ Detect start of numeric matrix (row-wise)
     matrix_start_row = None
     for idx in range(df.shape[0]):
@@ -3539,10 +4080,8 @@ def extract_and_save_metadata(tsv_file_path: str, metadata_json_path: str):
             break
     
     if matrix_start_row is None:
-        print("WARNING: Could not find where numeric data rows start. Using row 10 as default.")
+        logger.warning("Could not find where numeric data rows start. Using row 10 as default.")
         matrix_start_row = min(10, df.shape[0]-1)  # Default to row 10 or last row
-    else:
-        print(f"Detected matrix start row: {matrix_start_row}")
     
     # ✅ Detect start of numeric matrix (column-wise)
     matrix_start_col = None
@@ -3556,10 +4095,8 @@ def extract_and_save_metadata(tsv_file_path: str, metadata_json_path: str):
             break
     
     if matrix_start_col is None:
-        print("WARNING: Could not find where numeric data columns start. Using column 2 as default.")
+        logger.warning("Could not find where numeric data columns start. Using column 2 as default.")
         matrix_start_col = min(2, df.shape[1]-1)  # Default to column 2 or last column
-    else:
-        print(f"Detected matrix start column: {matrix_start_col}")
     
     # ✅ Extract Column Metadata (Samples)
     col_metadata = {}
@@ -3617,22 +4154,10 @@ def extract_and_save_metadata(tsv_file_path: str, metadata_json_path: str):
         "col": col_metadata,
         "row": row_metadata
     }
-    
-    # Print summary for debugging
-    print(f"Extracted {len(col_metadata)} column metadata categories")
-    for category, values in col_metadata.items():
-        print(f"  - {category}: {len(values)} unique values")
-        print(f"    Example values: {values[:3]}")
-    
-    print(f"Extracted {len(row_metadata)} row metadata categories")
-    for category, values in row_metadata.items():
-        print(f"  - {category}: {len(values)} unique values")
-        print(f"    Example values: {values[:3]}")
-    
+
     # ✅ Save Metadata JSON
     with open(metadata_json_path, "w") as f:
         json.dump(metadata, f, indent=4)
-    
-    print(f"Metadata saved at: {metadata_json_path}")
+
     return metadata
 

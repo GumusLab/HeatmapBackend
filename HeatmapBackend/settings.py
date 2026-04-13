@@ -26,14 +26,15 @@ SECRET_KEY = 'django-insecure-9-obe0+p-lyqf$fvgypjb&rk^rzibu8$bk2z2ln-%-=^!)nk*z
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-# ALLOWED_HOSTS = []
+# ALLOWED_HOSTS can be extended via DJANGO_ALLOWED_HOSTS env var (comma-separated)
 ALLOWED_HOSTS = [
     'rawalo01.u.hpc.mssm.edu',
     'rawalo01.dmz.hpc.mssm.edu',
     'clusterchirp.mssm.edu',
     'localhost',
     '127.0.0.1',
-]
+] + os.environ.get('DJANGO_ALLOWED_HOSTS', '').split(',')
+CORS_ALLOW_ALL_ORIGINS = os.environ.get('CORS_ALLOW_ALL', 'false').lower() == 'true'
 
 # Application definition
 
@@ -52,6 +53,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'corsheaders.middleware.CorsMiddleware',
+    'django.middleware.gzip.GZipMiddleware',  # GZIP compression for responses (40-70% size reduction)
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -86,6 +88,8 @@ REST_FRAMEWORK = {
     ),
     'DEFAULT_PARSER_CLASSES': (
         'rest_framework.parsers.JSONParser',
+        'rest_framework.parsers.MultiPartParser',  # Required for file uploads
+        'rest_framework.parsers.FormParser',       # Required for form data
     )
 }
 
@@ -187,3 +191,19 @@ STATIC_URL = 'static/'
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 CORS_ORIGIN_WHITELIST = ["http://localhost:3000", "http://localhost:3001","https://primavo.org"]
+
+# File Upload Settings - Critical for preventing duplicate uploads on server
+DATA_UPLOAD_MAX_MEMORY_SIZE = 1024 * 1024 * 1024  # 1GB - Increase for large files
+FILE_UPLOAD_MAX_MEMORY_SIZE = 1024 * 1024 * 1024   # 1GB - Increase for large files
+DATA_UPLOAD_MAX_NUMBER_FIELDS = 10000              # Increase if needed
+
+# File upload handlers - use memory for better performance with large files
+# Your code uses file.chunks() so no temp directory needed
+FILE_UPLOAD_HANDLERS = [
+    'django.core.files.uploadhandler.MemoryFileUploadHandler',
+    'django.core.files.uploadhandler.TemporaryFileUploadHandler',
+]
+
+# Connection timeout settings
+# These prevent long-running uploads from being terminated prematurely
+CONN_MAX_AGE = 300  # 5 minutes - keep DB connections alive longer

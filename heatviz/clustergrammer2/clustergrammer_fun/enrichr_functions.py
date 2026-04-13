@@ -1,7 +1,9 @@
 def add_enrichr_cats(df, inst_rc, run_enrichr, num_terms=10):
-  from copy import deepcopy
-
-  tmp_gene_list = deepcopy(df.index.tolist())
+  # NOTE: deepcopy replaced with native copies for optimization
+  # from copy import deepcopy
+  # tmp_gene_list = deepcopy(df.index.tolist())
+  # .tolist() already returns a new list, no copy needed
+  tmp_gene_list = df.index.tolist()
 
   gene_list = []
   if type(tmp_gene_list[0]) is tuple:
@@ -10,7 +12,9 @@ def add_enrichr_cats(df, inst_rc, run_enrichr, num_terms=10):
   else:
     gene_list = tmp_gene_list
 
-  orig_gene_list = deepcopy(gene_list)
+  # NOTE: list.copy() is sufficient for list of strings
+  # orig_gene_list = deepcopy(gene_list)
+  orig_gene_list = gene_list.copy()
 
   # set up for non-tuple case first
   if ': ' in  gene_list[0]:
@@ -82,7 +86,8 @@ def clust_from_response(response_list):
   import json
   import pandas as pd
   import math
-  from copy import deepcopy
+  # NOTE: deepcopy commented out - using pandas copy() and direct Network() instead
+  # from copy import deepcopy
 
   # print('----------------------')
   # print('enrichr_clust_from_response')
@@ -205,8 +210,11 @@ def clust_from_response(response_list):
 
     for num_terms in num_dict:
 
-      inst_df = deepcopy(df)
-      inst_net = deepcopy(Network())
+      # NOTE: deepcopy replaced for optimization
+      # inst_df = deepcopy(df)
+      # inst_net = deepcopy(Network())
+      inst_df = df.copy()
+      inst_net = Network()  # Network() already creates new object
 
       inst_df = inst_df[top_terms[score_type][num_terms]]
 

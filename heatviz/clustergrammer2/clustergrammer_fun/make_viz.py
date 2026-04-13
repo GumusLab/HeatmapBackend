@@ -1,6 +1,5 @@
 def viz_json(net, dendro=True, links=False):
   ''' make the dictionary for the clustergram.js visualization '''
-  print(f"🔍 DEBUG viz_json: Starting visualization creation")
   from . import calc_clust
   import numpy as np
 
@@ -23,9 +22,10 @@ def viz_json(net, dendro=True, links=False):
       inst_dict['name'] = net.dat['nodes'][inst_rc][i]
       # inst_dict['ini'] = net.dat['node_info'][inst_rc]['ini'][i]
       inst_dict['clust'] = net.dat['node_info'][inst_rc]['clust'].index(i)
-      # inst_dict['rank'] = net.dat['node_info'][inst_rc]['rank'][i]
-      # if 'rankvar' in inst_keys:
-      #   inst_dict['rankvar'] = net.dat['node_info'][inst_rc]['rankvar'][i]
+      # Round float values to reduce JSON size
+      inst_dict['rank'] = round(net.dat['node_info'][inst_rc]['rank'][i], 3)
+      if 'rankvar' in inst_keys:
+        inst_dict['rankvar'] = round(net.dat['node_info'][inst_rc]['rankvar'][i], 3)
       # fix for similarity matrix
       if len(all_cats) > 0:
 
@@ -38,21 +38,18 @@ def viz_json(net, dendro=True, links=False):
 
           if check_pval in net.dat['node_info'][inst_rc]:
             tmp_pval_name = inst_name_cat.replace('-','_') + '_pval'
-            inst_dict[tmp_pval_name] = net.dat['node_info'][inst_rc][check_pval][actual_cat_name]
+            inst_dict[tmp_pval_name] = round(net.dat['node_info'][inst_rc][check_pval][actual_cat_name], 4)
 
           tmp_index_name = inst_name_cat.replace('-', '_') + '_index'
           
         
           if tmp_index_name in net.dat['node_info'][inst_rc]:
             inst_dict[tmp_index_name] = net.dat['node_info'][inst_rc][tmp_index_name][i]
-          else:
-            if i == 0:  # Only print warning once
-              print(f"🔍 DEBUG viz_json: WARNING - {tmp_index_name} not found, skipping")
-            # Don't add this to inst_dict if it doesn't exist
 
 
       if len(net.dat['node_info'][inst_rc]['value']) > 0:
-        inst_dict['value'] = net.dat['node_info'][inst_rc]['value'][i]
+        val = net.dat['node_info'][inst_rc]['value'][i]
+        inst_dict['value'] = round(val, 3) if isinstance(val, (int, float)) else val
 
       if len(net.dat['node_info'][inst_rc]['info']) > 0:
         inst_dict['info'] = net.dat['node_info'][inst_rc]['info'][i]
@@ -61,8 +58,8 @@ def viz_json(net, dendro=True, links=False):
         inst_dict['group'] = []
         for tmp_dist in all_dist:
           tmp_dist = str(tmp_dist).replace('.', '')
-          tmp_append = float(
-              net.dat['node_info'][inst_rc]['group'][tmp_dist][i])
+          tmp_append = round(float(
+              net.dat['node_info'][inst_rc]['group'][tmp_dist][i]), 3)
           inst_dict['group'].append(tmp_append)
 
       net.viz[inst_rc + '_nodes'].append(inst_dict)
@@ -76,7 +73,7 @@ def viz_json(net, dendro=True, links=False):
         inst_dict = {}
         inst_dict['source'] = i
         inst_dict['target'] = j
-        inst_dict['value'] = float(net.dat['mat'][i, j])
+        inst_dict['value'] = round(float(net.dat['mat'][i, j]), 3)
 
         if np.isnan(inst_dict['value_orig']):
           inst_dict['value_orig'] = 'NaN'
@@ -84,7 +81,10 @@ def viz_json(net, dendro=True, links=False):
         net.viz['links'].append(inst_dict)
 
   else:
-    net.viz['mat'] = net.dat['mat'].tolist()
+    # Round matrix values to 3 decimal places to reduce JSON size by ~70%
+    # Convert to float64 first to avoid float32 precision artifacts when calling tolist()
+    rounded_mat = np.round(net.dat['mat'].astype(np.float64), 3)
+    net.viz['mat'] = rounded_mat.tolist()
 
 
 

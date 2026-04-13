@@ -26,6 +26,29 @@
 
 #   return exp_json
 
+import json
+
+class RoundingEncoder(json.JSONEncoder):
+    """Custom JSON encoder that rounds floats to 3 decimal places"""
+    def default(self, obj):
+        if isinstance(obj, float):
+            return round(obj, 3)
+        return super().default(obj)
+
+    def encode(self, obj):
+        # Override encode to handle floats in nested structures
+        return super().encode(self._round_floats(obj))
+
+    def _round_floats(self, obj):
+        if isinstance(obj, float):
+            return round(obj, 3)
+        elif isinstance(obj, dict):
+            return {k: self._round_floats(v) for k, v in obj.items()}
+        elif isinstance(obj, list):
+            return [self._round_floats(item) for item in obj]
+        return obj
+
+
 def export_net_json(net, net_type, indent='no-indent'):
     ''' export json string of dat '''
     import json
@@ -47,14 +70,14 @@ def export_net_json(net, net_type, indent='no-indent'):
     elif net_type == 'sim_col':
         exp_dict = net.sim['col']
 
-    # 🔧 ADD THIS LINE:
+    # Clean NaN values
     exp_dict = clean_nan_for_json(exp_dict)
 
-    # make json
+    # make json with custom encoder that rounds floats
     if indent == 'indent':
-        exp_json = json.dumps(exp_dict, indent=2)
+        exp_json = json.dumps(exp_dict, indent=2, cls=RoundingEncoder)
     else:
-        exp_json = json.dumps(exp_dict)
+        exp_json = json.dumps(exp_dict, cls=RoundingEncoder)
 
     return exp_json
 
@@ -80,11 +103,11 @@ def clean_nan_for_json(obj):
             return None  # NaN → null in JSON
         elif np.isinf(obj):
             if obj > 0:
-                return "Infinity"  # or use a large number like 1e308
+                return "Infinity"
             else:
-                return "-Infinity"  # or use a large negative number
+                return "-Infinity"
         else:
-            return float(obj)  # Ensure it's a Python float, not numpy float
+            return float(obj)  # Convert numpy float to Python float
     
     elif isinstance(obj, (int, np.integer)):
         return int(obj)  # Ensure it's a Python int, not numpy int
