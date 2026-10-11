@@ -993,7 +993,8 @@ def process_data_view(request):
             # No missing values - proceed with clustering
             response_data = make_cluster(
                 data=df_for_cluster,  # Pass DataFrame with proper column headers
-                imputation_method='auto'  # Default when no missing values
+                imputation_method='auto',   # Default when no missing values
+                zscore_axis='row'
             )
 
             # Handle response_data which can be either JSON string (success) or dict (error)
@@ -1219,6 +1220,7 @@ def handle_strategy_processing(request):
         response_data = make_cluster(
             data=file_path,
             imputation_method=strategy,
+            zscore_axis='row',
             **imputation_kwargs  # Pass all strategy parameters as kwargs
         )
 
@@ -1508,7 +1510,7 @@ def validate_command_values(action, target, value, df, metadata=None, filters=No
 
 def resolve_normalization_settings(
     transformation,
-    fallback_axis='col'
+    fallback_axis='row'
 ):
     """
     Resolve the independent normalization settings.
@@ -2334,7 +2336,7 @@ def extract_clustering_params_from_filters(filters):
     Extract zscore_axis, dist_type, and linkage_type from filters.
     Returns tuple: (zscore_axis, dist_type, linkage_type)
     """
-    zscore_axis = 'col'  # Default
+    zscore_axis = 'row'  # Default
     dist_type = 'euclidean'  # Default
     linkage_type = 'average'  # Default
 
