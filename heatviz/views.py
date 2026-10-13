@@ -1451,19 +1451,42 @@ def validate_command_values(action, target, value, df, metadata=None, filters=No
                     return False, f"value not found: '{value}' field not found in row metadata. Available fields: {', '.join(available_fields)}"
     
     elif action == "variance":
-        # Check if the requested number is reasonable
+        # Variance filtering is currently implemented for rows only.
+        if target != "rows":
+            return False, (
+                "value not found: variance filtering currently supports "
+                "rows only"
+            )
+
+        # Validate top-N variance selection against the numeric matrix
+        # rather than counting metadata rows.
         try:
             num_features = int(value)
-            if target == "rows":
-                max_rows = len(df.index) if hasattr(df, 'index') else 0
-                if num_features > max_rows:
-                    return False, f"value not found: requested {num_features} rows but only {max_rows} available"
-            elif target in ["columns", "cols"]:
-                max_cols = len(df.columns) if hasattr(df, 'columns') else 0
-                if num_features > max_cols:
-                    return False, f"value not found: requested {num_features} columns but only {max_cols} available"
-        except ValueError:
-            return False, f"value not found: '{value}' is not a valid number for variance selection"
+
+            if num_features <= 0:
+                return False, (
+                    f"value not found: '{value}' must be greater than 0 "
+                    "for variance selection"
+                )
+
+            matrix_start_row, _ = detect_matrix_start(df)
+
+            max_rows = max(
+                df.shape[0] - matrix_start_row,
+                0
+            )
+
+            if num_features > max_rows:
+                return False, (
+                    f"value not found: requested {num_features} rows "
+                    f"but only {max_rows} available"
+                )
+
+        except (ValueError, TypeError):
+            return False, (
+                f"value not found: '{value}' is not a valid number "
+                "for variance selection"
+            )
 
     elif action == "set_linkage":
         # Validate linkage method
