@@ -4273,6 +4273,127 @@ def apply_filters(df, filters,session_id=None):
                     remaining_cols = [col for col in data_matrix.columns if col not in exclude_labels]
                     if remaining_cols:
                         data_matrix = data_matrix.loc[:, remaining_cols]
+
+            elif f.get("type") == "multi_exclude":
+                criteria = f.get("criteria", [])
+
+                if not criteria:
+                    continue
+
+                all_nan_metadata = metadata_rows.isna().all().all()
+                if all_nan_metadata:
+                    try:
+                        orig_file_path = os.path.join(
+                            UPLOAD_DIR,
+                            f"{session_id}.tsv"
+                        )
+                        header_df = pd.read_csv(
+                            orig_file_path,
+                            sep="\t",
+                            nrows=matrix_start_row
+                        )
+                        metadata_rows = header_df
+                    except Exception as e:
+                        logger.warning(
+                            f"Could not load original file headers: {e}"
+                        )
+
+                matching_label_sets = []
+
+                for criterion in criteria:
+                    field = criterion.get("field")
+                    value = criterion.get("value")
+
+                    if not field or not value:
+                        continue
+
+                    field_row = None
+
+                    for idx in range(metadata_rows.shape[0]):
+                        row_values = (
+                            metadata_rows
+                            .iloc[idx, :]
+                            .astype(str)
+                        )
+
+                        if any(
+                            field == val.strip() or
+                            val.strip().startswith(f"{field}:")
+                            for val in row_values
+                        ):
+                            field_row = idx
+                            break
+
+                    if field_row is None:
+                        matching_label_sets = []
+                        break
+
+                    field_lower = field.lower()
+                    value_lower = value.lower()
+
+                    matching_labels = set()
+
+                    for col_idx in range(
+                        matrix_start_col,
+                        metadata_rows.shape[1]
+                    ):
+                        cell_value = str(
+                            metadata_rows.iloc[
+                                field_row,
+                                col_idx
+                            ]
+                        ).strip()
+
+                        if ":" not in cell_value:
+                            continue
+
+                        parts = cell_value.split(":", 1)
+
+                        if len(parts) != 2:
+                            continue
+
+                        cell_field = (
+                            parts[0]
+                            .strip()
+                            .lower()
+                        )
+                        cell_value_part = (
+                            parts[1]
+                            .strip()
+                            .lower()
+                        )
+
+                        if (
+                            cell_field == field_lower and
+                            cell_value_part == value_lower
+                        ):
+                            matching_labels.add(
+                                filtered_df.columns[col_idx]
+                            )
+
+                    matching_label_sets.append(
+                        matching_labels
+                    )
+
+                if matching_label_sets:
+                    # AND semantics: exclude only samples present
+                    # in every criterion's matching set.
+                    labels_to_exclude = set.intersection(
+                        *matching_label_sets
+                    )
+
+                    if labels_to_exclude:
+                        remaining_cols = [
+                            col
+                            for col in data_matrix.columns
+                            if col not in labels_to_exclude
+                        ]
+
+                        if remaining_cols:
+                            data_matrix = data_matrix.loc[
+                                :,
+                                remaining_cols
+                            ]
         
         if data_matrix.empty:
             logger.warning("No data remains after applying all filters")
@@ -4498,8 +4619,14 @@ def update_filters_multi(filters: dict, action: str, filter_list: list = None, t
         if target and value:
             # Check if exclude filter for this field already exists
             field_filter_exists = False
-            for i, existing_filter in enumerate(updated_filters.get("col", [])):
-                if existing_filter.get("type") == "exclude_filter" and existing_filter.get("field") == target:
+
+            for i, existing_filter in enumerate(
+                updated_filters.get("col", [])
+            ):
+                if (
+                    existing_filter.get("type") == "exclude_filter"
+                    and existing_filter.get("field") == target
+                ):
                     # Replace existing exclude filter for this field
                     updated_filters["col"][i] = {
                         "type": "exclude_filter",
@@ -4518,33 +4645,26 @@ def update_filters_multi(filters: dict, action: str, filter_list: list = None, t
                 })
 
     elif action == "multi_exclude":
-        # Add multiple exclude filters (AND logic - exclude samples matching ALL criteria)
+        # Store one compound exclusion so the criteria are evaluated
+        # together with AND logic.
+        criteria = []
+
         if filter_list:
             for filter_obj in filter_list:
                 filter_target = filter_obj.get("target")
                 filter_value = filter_obj.get("value")
 
                 if filter_target and filter_value:
-                    # Check if exclude filter for this field already exists
-                    field_filter_exists = False
-                    for i, existing_filter in enumerate(updated_filters.get("col", [])):
-                        if existing_filter.get("type") == "exclude_filter" and existing_filter.get("field") == filter_target:
-                            # Replace existing exclude filter for this field
-                            updated_filters["col"][i] = {
-                                "type": "exclude_filter",
-                                "field": filter_target,
-                                "value": filter_value
-                            }
-                            field_filter_exists = True
-                            break
+                    criteria.append({
+                        "field": filter_target,
+                        "value": filter_value
+                    })
 
-                    # If no exclude filter for this field exists, add new one
-                    if not field_filter_exists:
-                        updated_filters.setdefault("col", []).append({
-                            "type": "exclude_filter",
-                            "field": filter_target,
-                            "value": filter_value
-                        })
+        if criteria:
+            updated_filters.setdefault("col", []).append({
+                "type": "multi_exclude",
+                "criteria": criteria
+            })
 
     return updated_filters
 
