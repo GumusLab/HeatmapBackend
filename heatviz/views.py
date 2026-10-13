@@ -2316,6 +2316,11 @@ def command_execution(request):
                     response_data["distance"] = dist_type
                     response_data["linkage"] = linkage_type
 
+                # Return the validated criteria for compound filters separately
+                # from the complete accumulated filter state.
+                if action in ['multi_filter', 'multi_exclude']:
+                    response_data["resolved_filters"] = filter_list
+
                 print(f"🔧 RESPONSE includes clustering_result: {'clustering_result' in response_data}")
             else:
                 response_data = {
