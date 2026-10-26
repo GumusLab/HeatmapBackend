@@ -1574,16 +1574,23 @@ def command_execution(request):
     try:
         session_id = request.data.get('session_id')
         command = request.data.get('command')
+        workflow_action = request.data.get('workflow_action')
         current_state = request.data.get('current_state', {})
         filters = current_state.get('filters', {})
         command_history = current_state.get('commandHistory', [])
         transformation = current_state.get('transformation', {})
 
-        if not session_id or not command:
-            return Response({"error": "Missing 'session_id' or 'command'."}, status=400)
+        if not session_id or (not command and not workflow_action):
+            return Response(
+                {
+                    "error":
+                        "Missing 'session_id' or executable action."
+                },
+                status=400
+            )
 
         # Check for OpenAI API key early so users get a clear message
-        if not os.environ.get("OPENAI_API_KEY"):
+        if not workflow_action and not os.environ.get("OPENAI_API_KEY"):
             return JsonResponse(
                 {"error": "OpenAI API key not configured. Please run the container with: docker run -e OPENAI_API_KEY=sk-your-key ..."},
                 status=503
@@ -1607,155 +1614,399 @@ def command_execution(request):
             except Exception as e:
                 logger.warning(f"Error loading metadata file: {str(e)}")
 
-        # ✅ Build Prompt for ChatGPT with metadata
-        prompt = build_prompt(command, command_history, filters, metadata)
+        if workflow_action:
+            if not isinstance(workflow_action, dict):
+                return Response(
+                    {"error": "Unsupported structured workflow action."},
+                    status=400
+                )
 
-        openai_api_key = os.environ.get("OPENAI_API_KEY")
-        
-        try:
-            # ✅ Call OpenAI ChatGPT API
-            headers = {
-                "Content-Type": "application/json",
-                "Authorization": f"Bearer {openai_api_key}"
-            }
-            
-            payload = {
-                "model": "gpt-4o-mini",  # You can also use "gpt-4" for better results
-                "messages": [
-                    {"role": "system", "content": "You are a specialized assistant that generates JSON responses for heatmap visualization commands."},
-                    {"role": "user", "content": prompt}
-                ],
-                "temperature": 0.3,  # Lower temperature for more deterministic responses
-                "max_tokens": 150
-            }
-            
-            
-            # Make the API call with timeout
-            response = requests.post(
-                "https://api.openai.com/v1/chat/completions",
-                headers=headers,
-                json=payload,
-                timeout=10  # 10 second timeout
-            )
-            
-            # Check for errors in the API response
-            if response.status_code != 200:
-                logger.error(f"Error from OpenAI API: {response.status_code} - {response.text}")
-                raise Exception(f"OpenAI API error: {response.status_code}")
-                
-            response_data = response.json()
-            
-            # Extract the content from the response
-            gpt_response = response_data["choices"][0]["message"]["content"].strip()
+            workflow_type = workflow_action.get('type')
+            parameters = workflow_action.get('parameters', {})
 
-            if not gpt_response:
-                ollama_response = generate_fallback_response(command)
+            if workflow_type == 'set_distance':
+                ollama_response = {
+                    "action": "set_distance",
+                    "target": "both",
+                    "value": parameters.get('distance')
+                }
+
+            elif workflow_type == 'set_linkage':
+                ollama_response = {
+                    "action": "set_linkage",
+                    "target": "both",
+                    "value": parameters.get('linkage')
+                }
+
+            elif workflow_type == 'set_clustering':
+                ollama_response = {
+                    "action": "set_clustering",
+                    "target": "both",
+                    "value": "",
+                    "distance": parameters.get('distance'),
+                    "linkage": parameters.get('linkage')
+                }
+
+            elif workflow_type == 'filter':
+                workflow_target = workflow_action.get('target')
+                mode = parameters.get('mode')
+                criteria = parameters.get('criteria')
+
+                if criteria is not None:
+                    if (
+                        workflow_target != 'columns' or
+                        mode != 'all' or
+                        not isinstance(criteria, list) or
+                        len(criteria) == 0
+                    ):
+                        return Response(
+                            {
+                                "error":
+                                    "Unsupported structured multi-filter action."
+                            },
+                            status=400
+                        )
+
+                    filter_list = []
+
+                    for criterion in criteria:
+                        if (
+                            not isinstance(criterion, dict) or
+                            not criterion.get('field') or
+                            criterion.get('value') is None or
+                            criterion.get('operator') != 'equals'
+                        ):
+                            return Response(
+                                {
+                                    "error":
+                                        "Unsupported structured multi-filter criterion."
+                                },
+                                status=400
+                            )
+
+                        filter_list.append({
+                            "target": criterion.get('field'),
+                            "value": criterion.get('value')
+                        })
+
+                    ollama_response = {
+                        "action": "multi_filter",
+                        "target": "",
+                        "value": "",
+                        "filters": filter_list
+                    }
+
+                else:
+                    field = parameters.get('field')
+                    filter_value = parameters.get('value')
+                    operator = parameters.get(
+                        'operator',
+                        'equals'
+                    )
+
+                    if (
+                        workflow_target not in ['rows', 'columns'] or
+                        not field or
+                        filter_value is None or
+                        operator != 'equals'
+                    ):
+                        return Response(
+                            {
+                                "error":
+                                    "Unsupported structured filter action."
+                            },
+                            status=400
+                        )
+
+                    ollama_response = {
+                        "action": (
+                            "gene_filter"
+                            if workflow_target == "rows"
+                            else "sample_filter"
+                        ),
+                        "target": field,
+                        "value": filter_value
+                    }
+
+            elif workflow_type == 'inverse_filter':
+                workflow_target = workflow_action.get('target')
+                mode = parameters.get('mode')
+                criteria = parameters.get('criteria')
+
+                if criteria is not None:
+                    if (
+                        workflow_target != 'columns' or
+                        mode != 'any' or
+                        not isinstance(criteria, list) or
+                        len(criteria) == 0
+                    ):
+                        return Response(
+                            {
+                                "error":
+                                    "Unsupported structured multi-exclude action."
+                            },
+                            status=400
+                        )
+
+                    filter_list = []
+
+                    for criterion in criteria:
+                        if (
+                            not isinstance(criterion, dict) or
+                            not criterion.get('field') or
+                            criterion.get('value') is None or
+                            criterion.get('operator') != 'exclude_equals'
+                        ):
+                            return Response(
+                                {
+                                    "error":
+                                        "Unsupported structured multi-exclude criterion."
+                                },
+                                status=400
+                            )
+
+                        filter_list.append({
+                            "target": criterion.get('field'),
+                            "value": criterion.get('value')
+                        })
+
+                    ollama_response = {
+                        "action": "multi_exclude",
+                        "target": "",
+                        "value": "",
+                        "filters": filter_list
+                    }
+
+                else:
+                    field = parameters.get('field')
+                    filter_value = parameters.get('value')
+                    operator = parameters.get(
+                        'operator',
+                        'exclude_equals'
+                    )
+
+                    if (
+                        workflow_target != 'columns' or
+                        not field or
+                        filter_value is None or
+                        operator != 'exclude_equals'
+                    ):
+                        return Response(
+                            {
+                                "error":
+                                    "Unsupported structured inverse-filter action."
+                            },
+                            status=400
+                        )
+
+                    ollama_response = {
+                        "action": "exclude_filter",
+                        "target": field,
+                        "value": filter_value
+                    }
+
+            elif workflow_type == 'variance_filter':
+                workflow_target = workflow_action.get('target')
+                top_n = parameters.get('topN')
+                metric = parameters.get('metric')
+
+                if (
+                    workflow_target != 'rows' or
+                    metric != 'variance' or
+                    not isinstance(top_n, int) or
+                    top_n <= 0
+                ):
+                    return Response(
+                        {
+                            "error":
+                                "Unsupported structured variance-filter action."
+                        },
+                        status=400
+                    )
+
+                ollama_response = {
+                    "action": "variance",
+                    "target": "rows",
+                    "value": str(top_n)
+                }
+
+            elif workflow_type == 'clear_filters':
+                workflow_target = workflow_action.get('target')
+
+                if (
+                    workflow_target != 'matrix' or
+                    parameters
+                ):
+                    return Response(
+                        {
+                            "error":
+                                "Unsupported structured clear-filters action."
+                        },
+                        status=400
+                    )
+
+                ollama_response = {
+                    "action": "clear_filters",
+                    "target": "",
+                    "value": ""
+                }
+
             else:
-                try:
-                    # Try to find and parse JSON in the response
-                    import re
+                return Response(
+                    {"error": "Unsupported structured workflow action."},
+                    status=400
+                )
 
-                    # Clean the response - replace smart quotes and other problematic characters
-                    def clean_json_string(s):
-                        """Replace smart quotes and other special characters with standard ones."""
-                        replacements = {
-                            '"': '"',  # Left double quote
-                            '"': '"',  # Right double quote
-                            ''': "'",  # Left single quote
-                            ''': "'",  # Right single quote
-                            '–': '-',  # En dash
-                            '—': '-',  # Em dash
-                            '…': '...',  # Ellipsis
-                        }
-                        for old, new in replacements.items():
-                            s = s.replace(old, new)
-                        return s
+        else:    
+            # ✅ Build Prompt for ChatGPT with metadata
+            prompt = build_prompt(command, command_history, filters, metadata)
 
-                    gpt_response = clean_json_string(gpt_response)
+            openai_api_key = os.environ.get("OPENAI_API_KEY")
+            
+            try:
+                # ✅ Call OpenAI ChatGPT API
+                headers = {
+                    "Content-Type": "application/json",
+                    "Authorization": f"Bearer {openai_api_key}"
+                }
+                
+                payload = {
+                    "model": "gpt-4o-mini",  # You can also use "gpt-4" for better results
+                    "messages": [
+                        {"role": "system", "content": "You are a specialized assistant that generates JSON responses for heatmap visualization commands."},
+                        {"role": "user", "content": prompt}
+                    ],
+                    "temperature": 0.3,  # Lower temperature for more deterministic responses
+                    "max_tokens": 150
+                }
+                
+                
+                # Make the API call with timeout
+                response = requests.post(
+                    "https://api.openai.com/v1/chat/completions",
+                    headers=headers,
+                    json=payload,
+                    timeout=10  # 10 second timeout
+                )
+                
+                # Check for errors in the API response
+                if response.status_code != 200:
+                    logger.error(f"Error from OpenAI API: {response.status_code} - {response.text}")
+                    raise Exception(f"OpenAI API error: {response.status_code}")
+                    
+                response_data = response.json()
+                
+                # Extract the content from the response
+                gpt_response = response_data["choices"][0]["message"]["content"].strip()
 
-                    # First, try to parse the entire response as JSON (handles clean responses)
-                    ollama_response = None
+                if not gpt_response:
+                    ollama_response = generate_fallback_response(command)
+                else:
                     try:
-                        cleaned_response = gpt_response.strip()
-                        # Remove markdown code blocks if present
-                        if cleaned_response.startswith("```"):
-                            cleaned_response = re.sub(r'^```(?:json)?\s*', '', cleaned_response)
-                            cleaned_response = re.sub(r'\s*```$', '', cleaned_response)
-                        parsed_json = json.loads(cleaned_response)
-                        if "action" in parsed_json or "error" in parsed_json:
-                            ollama_response = parsed_json
-                    except json.JSONDecodeError:
-                        pass  # Will try regex extraction below
+                        # Try to find and parse JSON in the response
+                        import re
 
-                    # If direct parsing failed, try to extract JSON with proper brace matching
-                    if ollama_response is None:
-                        # Find JSON by matching balanced braces
-                        def extract_json_objects(text):
-                            """Extract JSON objects with proper brace balancing."""
-                            objects = []
-                            i = 0
-                            while i < len(text):
-                                if text[i] == '{':
-                                    depth = 1
-                                    start = i
-                                    i += 1
-                                    while i < len(text) and depth > 0:
-                                        if text[i] == '{':
-                                            depth += 1
-                                        elif text[i] == '}':
-                                            depth -= 1
+                        # Clean the response - replace smart quotes and other problematic characters
+                        def clean_json_string(s):
+                            """Replace smart quotes and other special characters with standard ones."""
+                            replacements = {
+                                '"': '"',  # Left double quote
+                                '"': '"',  # Right double quote
+                                ''': "'",  # Left single quote
+                                ''': "'",  # Right single quote
+                                '–': '-',  # En dash
+                                '—': '-',  # Em dash
+                                '…': '...',  # Ellipsis
+                            }
+                            for old, new in replacements.items():
+                                s = s.replace(old, new)
+                            return s
+
+                        gpt_response = clean_json_string(gpt_response)
+
+                        # First, try to parse the entire response as JSON (handles clean responses)
+                        ollama_response = None
+                        try:
+                            cleaned_response = gpt_response.strip()
+                            # Remove markdown code blocks if present
+                            if cleaned_response.startswith("```"):
+                                cleaned_response = re.sub(r'^```(?:json)?\s*', '', cleaned_response)
+                                cleaned_response = re.sub(r'\s*```$', '', cleaned_response)
+                            parsed_json = json.loads(cleaned_response)
+                            if "action" in parsed_json or "error" in parsed_json:
+                                ollama_response = parsed_json
+                        except json.JSONDecodeError:
+                            pass  # Will try regex extraction below
+
+                        # If direct parsing failed, try to extract JSON with proper brace matching
+                        if ollama_response is None:
+                            # Find JSON by matching balanced braces
+                            def extract_json_objects(text):
+                                """Extract JSON objects with proper brace balancing."""
+                                objects = []
+                                i = 0
+                                while i < len(text):
+                                    if text[i] == '{':
+                                        depth = 1
+                                        start = i
                                         i += 1
-                                    if depth == 0:
-                                        objects.append(text[start:i])
-                                else:
-                                    i += 1
-                            return objects
+                                        while i < len(text) and depth > 0:
+                                            if text[i] == '{':
+                                                depth += 1
+                                            elif text[i] == '}':
+                                                depth -= 1
+                                            i += 1
+                                        if depth == 0:
+                                            objects.append(text[start:i])
+                                    else:
+                                        i += 1
+                                return objects
 
-                        matches = extract_json_objects(gpt_response)
+                            matches = extract_json_objects(gpt_response)
 
-                        if matches:
-                            for potential_json in matches:
-                                try:
-                                    parsed_json = json.loads(potential_json)
+                            if matches:
+                                for potential_json in matches:
+                                    try:
+                                        parsed_json = json.loads(potential_json)
 
-                                    # Check for error first, before looking for action
-                                    if "error" in parsed_json:
-                                        ollama_response = parsed_json
-                                        break
-                                    elif "action" in parsed_json:
-                                        ollama_response = parsed_json
-                                        break
+                                        # Check for error first, before looking for action
+                                        if "error" in parsed_json:
+                                            ollama_response = parsed_json
+                                            break
+                                        elif "action" in parsed_json:
+                                            ollama_response = parsed_json
+                                            break
 
-                                except json.JSONDecodeError:
-                                    continue
-                                except Exception:
-                                    continue
+                                    except json.JSONDecodeError:
+                                        continue
+                                    except Exception:
+                                        continue
 
-                    # Check if we actually found valid JSON
-                    if ollama_response is None:
+                        # Check if we actually found valid JSON
+                        if ollama_response is None:
+                            ollama_response = generate_fallback_response(command)
+
+                    except Exception as e:
+                        logger.warning(f"Error processing ChatGPT response: {e}")
                         ollama_response = generate_fallback_response(command)
 
-                except Exception as e:
-                    logger.warning(f"Error processing ChatGPT response: {e}")
-                    ollama_response = generate_fallback_response(command)
 
-
-        except Exception as e:
-            logger.error(f"Error with ChatGPT request: {str(e)}")
-            ollama_response = generate_fallback_response(command)
-        
-        # If GPT returned an error, try the keyword-based fallback parser as a second chance.
-        # GPT can be overly aggressive at rejecting valid commands like "find xyz" or "show pathways".
-        if "error" in ollama_response and "action" not in ollama_response:
-            fallback = generate_fallback_response(command)
-            if "action" in fallback:
-                # Fallback found a valid action — use it instead of GPT's error
-                logger.info(f"🔄 GPT returned error, but fallback found action: {fallback}")
-                ollama_response = fallback
-            elif "suggestions" in fallback:
-                # Fallback has a more helpful error with suggestions — use it
-                logger.info(f"🔄 GPT returned generic error, using fallback suggestions: {fallback}")
-                ollama_response = fallback
+            except Exception as e:
+                logger.error(f"Error with ChatGPT request: {str(e)}")
+                ollama_response = generate_fallback_response(command)
+            
+            # If GPT returned an error, try the keyword-based fallback parser as a second chance.
+            # GPT can be overly aggressive at rejecting valid commands like "find xyz" or "show pathways".
+            if "error" in ollama_response and "action" not in ollama_response:
+                fallback = generate_fallback_response(command)
+                if "action" in fallback:
+                    # Fallback found a valid action — use it instead of GPT's error
+                    logger.info(f"🔄 GPT returned error, but fallback found action: {fallback}")
+                    ollama_response = fallback
+                elif "suggestions" in fallback:
+                    # Fallback has a more helpful error with suggestions — use it
+                    logger.info(f"🔄 GPT returned generic error, using fallback suggestions: {fallback}")
+                    ollama_response = fallback
 
         # Extract data from response
         action = ollama_response.get("action")
@@ -3620,7 +3871,7 @@ def build_prompt(command, command_history=None, filters=None, metadata=None):
         "  - 'gene_filter'      : Filter rows/genes based on metadata. 'target' is the metadata field, 'value' is the filter value.\n"
         "  - 'multi_filter'     : Filter samples by MULTIPLE conditions (AND logic). Use when user specifies 2+ criteria. 'filters' is an array of {target, value} objects.\n"
         "  - 'exclude_filter'   : EXCLUDE/REMOVE samples matching criteria. Use for 'remove', 'exclude', 'not', 'without' commands. 'target' and 'value' specify what to exclude.\n"
-        "  - 'multi_exclude'    : EXCLUDE samples matching MULTIPLE criteria (AND logic). 'filters' is an array of {target, value} objects to exclude.\n"
+        "  - 'multi_exclude'    : EXCLUDE samples matching ANY of MULTIPLE criteria (OR logic). 'filters' is an array of {target, value} objects to exclude.\n"
         "  - 'clear_filters'    : Reset/clear all applied filters. Use for 'reset', 'clear', 'show all', 'remove filters' commands.\n"
         "  - 'variance'         : Select top N most variable rows or columns. 'value' should be the number of top features.\n"
         "  - 'set_opacity'      : Change the opacity/intensity of the heatmap. 'value' should be a number between 0.5 and 3.0 or 'dark'/'light'.\n"
@@ -3717,8 +3968,8 @@ EXCLUDE/REMOVE Commands (use exclude_filter or multi_exclude):
 "exclude females" → {{ "action": "exclude_filter", "target": "Sex", "value": "Female" }}
 "exclude C1D1 timepoint" → {{ "action": "exclude_filter", "target": "Timepoint", "value": "C1D1" }}
 "remove non-responders" → {{ "action": "exclude_filter", "target": "Response", "value": "Non-responder" }}
-"exclude male non-responders" → {{ "action": "multi_exclude", "filters": [{{"target": "Sex", "value": "Male"}}, {{"target": "Response", "value": "Non-responder"}}] }}
-"remove females at C1D1" → {{ "action": "multi_exclude", "filters": [{{"target": "Sex", "value": "Female"}}, {{"target": "Timepoint", "value": "C1D1"}}] }}
+"exclude males or non-responders" → {{ "action": "multi_exclude", "filters": [{{"target": "Sex", "value": "Male"}}, {{"target": "Response", "value": "Non-responder"}}] }}
+"remove females or C1D1 samples" → {{ "action": "multi_exclude", "filters": [{{"target": "Sex", "value": "Female"}}, {{"target": "Timepoint", "value": "C1D1"}}] }}
 
 CLEAR/RESET Commands:
 "clear all filters" → {{ "action": "clear_filters" }}
@@ -4399,9 +4650,9 @@ def apply_filters(df, filters,session_id=None):
                     )
 
                 if matching_label_sets:
-                    # AND semantics: exclude only samples present
-                    # in every criterion's matching set.
-                    labels_to_exclude = set.intersection(
+                    # OR semantics: exclude samples matching
+                    # any of the exclusion criteria.
+                    labels_to_exclude = set.union(
                         *matching_label_sets
                     )
 
@@ -4669,7 +4920,7 @@ def update_filters_multi(filters: dict, action: str, filter_list: list = None, t
 
     elif action == "multi_exclude":
         # Store one compound exclusion so the criteria are evaluated
-        # together with AND logic.
+        # with OR semantics: exclude samples matching any criterion.
         criteria = []
 
         if filter_list:
