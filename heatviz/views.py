@@ -1451,19 +1451,42 @@ def validate_command_values(action, target, value, df, metadata=None, filters=No
                     return False, f"value not found: '{value}' field not found in row metadata. Available fields: {', '.join(available_fields)}"
     
     elif action == "variance":
-        # Check if the requested number is reasonable
+        # Variance filtering is currently implemented for rows only.
+        if target != "rows":
+            return False, (
+                "value not found: variance filtering currently supports "
+                "rows only"
+            )
+
+        # Validate top-N variance selection against the numeric matrix
+        # rather than counting metadata rows.
         try:
             num_features = int(value)
-            if target == "rows":
-                max_rows = len(df.index) if hasattr(df, 'index') else 0
-                if num_features > max_rows:
-                    return False, f"value not found: requested {num_features} rows but only {max_rows} available"
-            elif target in ["columns", "cols"]:
-                max_cols = len(df.columns) if hasattr(df, 'columns') else 0
-                if num_features > max_cols:
-                    return False, f"value not found: requested {num_features} columns but only {max_cols} available"
-        except ValueError:
-            return False, f"value not found: '{value}' is not a valid number for variance selection"
+
+            if num_features <= 0:
+                return False, (
+                    f"value not found: '{value}' must be greater than 0 "
+                    "for variance selection"
+                )
+
+            matrix_start_row, _ = detect_matrix_start(df)
+
+            max_rows = max(
+                df.shape[0] - matrix_start_row,
+                0
+            )
+
+            if num_features > max_rows:
+                return False, (
+                    f"value not found: requested {num_features} rows "
+                    f"but only {max_rows} available"
+                )
+
+        except (ValueError, TypeError):
+            return False, (
+                f"value not found: '{value}' is not a valid number "
+                "for variance selection"
+            )
 
     elif action == "set_linkage":
         # Validate linkage method
@@ -1551,16 +1574,23 @@ def command_execution(request):
     try:
         session_id = request.data.get('session_id')
         command = request.data.get('command')
+        workflow_action = request.data.get('workflow_action')
         current_state = request.data.get('current_state', {})
         filters = current_state.get('filters', {})
         command_history = current_state.get('commandHistory', [])
         transformation = current_state.get('transformation', {})
 
-        if not session_id or not command:
-            return Response({"error": "Missing 'session_id' or 'command'."}, status=400)
+        if not session_id or (not command and not workflow_action):
+            return Response(
+                {
+                    "error":
+                        "Missing 'session_id' or executable action."
+                },
+                status=400
+            )
 
         # Check for OpenAI API key early so users get a clear message
-        if not os.environ.get("OPENAI_API_KEY"):
+        if not workflow_action and not os.environ.get("OPENAI_API_KEY"):
             return JsonResponse(
                 {"error": "OpenAI API key not configured. Please run the container with: docker run -e OPENAI_API_KEY=sk-your-key ..."},
                 status=503
@@ -1584,155 +1614,399 @@ def command_execution(request):
             except Exception as e:
                 logger.warning(f"Error loading metadata file: {str(e)}")
 
-        # ✅ Build Prompt for ChatGPT with metadata
-        prompt = build_prompt(command, command_history, filters, metadata)
+        if workflow_action:
+            if not isinstance(workflow_action, dict):
+                return Response(
+                    {"error": "Unsupported structured workflow action."},
+                    status=400
+                )
 
-        openai_api_key = os.environ.get("OPENAI_API_KEY")
-        
-        try:
-            # ✅ Call OpenAI ChatGPT API
-            headers = {
-                "Content-Type": "application/json",
-                "Authorization": f"Bearer {openai_api_key}"
-            }
-            
-            payload = {
-                "model": "gpt-4o-mini",  # You can also use "gpt-4" for better results
-                "messages": [
-                    {"role": "system", "content": "You are a specialized assistant that generates JSON responses for heatmap visualization commands."},
-                    {"role": "user", "content": prompt}
-                ],
-                "temperature": 0.3,  # Lower temperature for more deterministic responses
-                "max_tokens": 150
-            }
-            
-            
-            # Make the API call with timeout
-            response = requests.post(
-                "https://api.openai.com/v1/chat/completions",
-                headers=headers,
-                json=payload,
-                timeout=10  # 10 second timeout
-            )
-            
-            # Check for errors in the API response
-            if response.status_code != 200:
-                logger.error(f"Error from OpenAI API: {response.status_code} - {response.text}")
-                raise Exception(f"OpenAI API error: {response.status_code}")
-                
-            response_data = response.json()
-            
-            # Extract the content from the response
-            gpt_response = response_data["choices"][0]["message"]["content"].strip()
+            workflow_type = workflow_action.get('type')
+            parameters = workflow_action.get('parameters', {})
 
-            if not gpt_response:
-                ollama_response = generate_fallback_response(command)
+            if workflow_type == 'set_distance':
+                ollama_response = {
+                    "action": "set_distance",
+                    "target": "both",
+                    "value": parameters.get('distance')
+                }
+
+            elif workflow_type == 'set_linkage':
+                ollama_response = {
+                    "action": "set_linkage",
+                    "target": "both",
+                    "value": parameters.get('linkage')
+                }
+
+            elif workflow_type == 'set_clustering':
+                ollama_response = {
+                    "action": "set_clustering",
+                    "target": "both",
+                    "value": "",
+                    "distance": parameters.get('distance'),
+                    "linkage": parameters.get('linkage')
+                }
+
+            elif workflow_type == 'filter':
+                workflow_target = workflow_action.get('target')
+                mode = parameters.get('mode')
+                criteria = parameters.get('criteria')
+
+                if criteria is not None:
+                    if (
+                        workflow_target != 'columns' or
+                        mode != 'all' or
+                        not isinstance(criteria, list) or
+                        len(criteria) == 0
+                    ):
+                        return Response(
+                            {
+                                "error":
+                                    "Unsupported structured multi-filter action."
+                            },
+                            status=400
+                        )
+
+                    filter_list = []
+
+                    for criterion in criteria:
+                        if (
+                            not isinstance(criterion, dict) or
+                            not criterion.get('field') or
+                            criterion.get('value') is None or
+                            criterion.get('operator') != 'equals'
+                        ):
+                            return Response(
+                                {
+                                    "error":
+                                        "Unsupported structured multi-filter criterion."
+                                },
+                                status=400
+                            )
+
+                        filter_list.append({
+                            "target": criterion.get('field'),
+                            "value": criterion.get('value')
+                        })
+
+                    ollama_response = {
+                        "action": "multi_filter",
+                        "target": "",
+                        "value": "",
+                        "filters": filter_list
+                    }
+
+                else:
+                    field = parameters.get('field')
+                    filter_value = parameters.get('value')
+                    operator = parameters.get(
+                        'operator',
+                        'equals'
+                    )
+
+                    if (
+                        workflow_target not in ['rows', 'columns'] or
+                        not field or
+                        filter_value is None or
+                        operator != 'equals'
+                    ):
+                        return Response(
+                            {
+                                "error":
+                                    "Unsupported structured filter action."
+                            },
+                            status=400
+                        )
+
+                    ollama_response = {
+                        "action": (
+                            "gene_filter"
+                            if workflow_target == "rows"
+                            else "sample_filter"
+                        ),
+                        "target": field,
+                        "value": filter_value
+                    }
+
+            elif workflow_type == 'inverse_filter':
+                workflow_target = workflow_action.get('target')
+                mode = parameters.get('mode')
+                criteria = parameters.get('criteria')
+
+                if criteria is not None:
+                    if (
+                        workflow_target != 'columns' or
+                        mode != 'any' or
+                        not isinstance(criteria, list) or
+                        len(criteria) == 0
+                    ):
+                        return Response(
+                            {
+                                "error":
+                                    "Unsupported structured multi-exclude action."
+                            },
+                            status=400
+                        )
+
+                    filter_list = []
+
+                    for criterion in criteria:
+                        if (
+                            not isinstance(criterion, dict) or
+                            not criterion.get('field') or
+                            criterion.get('value') is None or
+                            criterion.get('operator') != 'exclude_equals'
+                        ):
+                            return Response(
+                                {
+                                    "error":
+                                        "Unsupported structured multi-exclude criterion."
+                                },
+                                status=400
+                            )
+
+                        filter_list.append({
+                            "target": criterion.get('field'),
+                            "value": criterion.get('value')
+                        })
+
+                    ollama_response = {
+                        "action": "multi_exclude",
+                        "target": "",
+                        "value": "",
+                        "filters": filter_list
+                    }
+
+                else:
+                    field = parameters.get('field')
+                    filter_value = parameters.get('value')
+                    operator = parameters.get(
+                        'operator',
+                        'exclude_equals'
+                    )
+
+                    if (
+                        workflow_target != 'columns' or
+                        not field or
+                        filter_value is None or
+                        operator != 'exclude_equals'
+                    ):
+                        return Response(
+                            {
+                                "error":
+                                    "Unsupported structured inverse-filter action."
+                            },
+                            status=400
+                        )
+
+                    ollama_response = {
+                        "action": "exclude_filter",
+                        "target": field,
+                        "value": filter_value
+                    }
+
+            elif workflow_type == 'variance_filter':
+                workflow_target = workflow_action.get('target')
+                top_n = parameters.get('topN')
+                metric = parameters.get('metric')
+
+                if (
+                    workflow_target != 'rows' or
+                    metric != 'variance' or
+                    not isinstance(top_n, int) or
+                    top_n <= 0
+                ):
+                    return Response(
+                        {
+                            "error":
+                                "Unsupported structured variance-filter action."
+                        },
+                        status=400
+                    )
+
+                ollama_response = {
+                    "action": "variance",
+                    "target": "rows",
+                    "value": str(top_n)
+                }
+
+            elif workflow_type == 'clear_filters':
+                workflow_target = workflow_action.get('target')
+
+                if (
+                    workflow_target != 'matrix' or
+                    parameters
+                ):
+                    return Response(
+                        {
+                            "error":
+                                "Unsupported structured clear-filters action."
+                        },
+                        status=400
+                    )
+
+                ollama_response = {
+                    "action": "clear_filters",
+                    "target": "",
+                    "value": ""
+                }
+
             else:
-                try:
-                    # Try to find and parse JSON in the response
-                    import re
+                return Response(
+                    {"error": "Unsupported structured workflow action."},
+                    status=400
+                )
 
-                    # Clean the response - replace smart quotes and other problematic characters
-                    def clean_json_string(s):
-                        """Replace smart quotes and other special characters with standard ones."""
-                        replacements = {
-                            '"': '"',  # Left double quote
-                            '"': '"',  # Right double quote
-                            ''': "'",  # Left single quote
-                            ''': "'",  # Right single quote
-                            '–': '-',  # En dash
-                            '—': '-',  # Em dash
-                            '…': '...',  # Ellipsis
-                        }
-                        for old, new in replacements.items():
-                            s = s.replace(old, new)
-                        return s
+        else:    
+            # ✅ Build Prompt for ChatGPT with metadata
+            prompt = build_prompt(command, command_history, filters, metadata)
 
-                    gpt_response = clean_json_string(gpt_response)
+            openai_api_key = os.environ.get("OPENAI_API_KEY")
+            
+            try:
+                # ✅ Call OpenAI ChatGPT API
+                headers = {
+                    "Content-Type": "application/json",
+                    "Authorization": f"Bearer {openai_api_key}"
+                }
+                
+                payload = {
+                    "model": "gpt-4o-mini",  # You can also use "gpt-4" for better results
+                    "messages": [
+                        {"role": "system", "content": "You are a specialized assistant that generates JSON responses for heatmap visualization commands."},
+                        {"role": "user", "content": prompt}
+                    ],
+                    "temperature": 0.3,  # Lower temperature for more deterministic responses
+                    "max_tokens": 150
+                }
+                
+                
+                # Make the API call with timeout
+                response = requests.post(
+                    "https://api.openai.com/v1/chat/completions",
+                    headers=headers,
+                    json=payload,
+                    timeout=10  # 10 second timeout
+                )
+                
+                # Check for errors in the API response
+                if response.status_code != 200:
+                    logger.error(f"Error from OpenAI API: {response.status_code} - {response.text}")
+                    raise Exception(f"OpenAI API error: {response.status_code}")
+                    
+                response_data = response.json()
+                
+                # Extract the content from the response
+                gpt_response = response_data["choices"][0]["message"]["content"].strip()
 
-                    # First, try to parse the entire response as JSON (handles clean responses)
-                    ollama_response = None
+                if not gpt_response:
+                    ollama_response = generate_fallback_response(command)
+                else:
                     try:
-                        cleaned_response = gpt_response.strip()
-                        # Remove markdown code blocks if present
-                        if cleaned_response.startswith("```"):
-                            cleaned_response = re.sub(r'^```(?:json)?\s*', '', cleaned_response)
-                            cleaned_response = re.sub(r'\s*```$', '', cleaned_response)
-                        parsed_json = json.loads(cleaned_response)
-                        if "action" in parsed_json or "error" in parsed_json:
-                            ollama_response = parsed_json
-                    except json.JSONDecodeError:
-                        pass  # Will try regex extraction below
+                        # Try to find and parse JSON in the response
+                        import re
 
-                    # If direct parsing failed, try to extract JSON with proper brace matching
-                    if ollama_response is None:
-                        # Find JSON by matching balanced braces
-                        def extract_json_objects(text):
-                            """Extract JSON objects with proper brace balancing."""
-                            objects = []
-                            i = 0
-                            while i < len(text):
-                                if text[i] == '{':
-                                    depth = 1
-                                    start = i
-                                    i += 1
-                                    while i < len(text) and depth > 0:
-                                        if text[i] == '{':
-                                            depth += 1
-                                        elif text[i] == '}':
-                                            depth -= 1
+                        # Clean the response - replace smart quotes and other problematic characters
+                        def clean_json_string(s):
+                            """Replace smart quotes and other special characters with standard ones."""
+                            replacements = {
+                                '"': '"',  # Left double quote
+                                '"': '"',  # Right double quote
+                                ''': "'",  # Left single quote
+                                ''': "'",  # Right single quote
+                                '–': '-',  # En dash
+                                '—': '-',  # Em dash
+                                '…': '...',  # Ellipsis
+                            }
+                            for old, new in replacements.items():
+                                s = s.replace(old, new)
+                            return s
+
+                        gpt_response = clean_json_string(gpt_response)
+
+                        # First, try to parse the entire response as JSON (handles clean responses)
+                        ollama_response = None
+                        try:
+                            cleaned_response = gpt_response.strip()
+                            # Remove markdown code blocks if present
+                            if cleaned_response.startswith("```"):
+                                cleaned_response = re.sub(r'^```(?:json)?\s*', '', cleaned_response)
+                                cleaned_response = re.sub(r'\s*```$', '', cleaned_response)
+                            parsed_json = json.loads(cleaned_response)
+                            if "action" in parsed_json or "error" in parsed_json:
+                                ollama_response = parsed_json
+                        except json.JSONDecodeError:
+                            pass  # Will try regex extraction below
+
+                        # If direct parsing failed, try to extract JSON with proper brace matching
+                        if ollama_response is None:
+                            # Find JSON by matching balanced braces
+                            def extract_json_objects(text):
+                                """Extract JSON objects with proper brace balancing."""
+                                objects = []
+                                i = 0
+                                while i < len(text):
+                                    if text[i] == '{':
+                                        depth = 1
+                                        start = i
                                         i += 1
-                                    if depth == 0:
-                                        objects.append(text[start:i])
-                                else:
-                                    i += 1
-                            return objects
+                                        while i < len(text) and depth > 0:
+                                            if text[i] == '{':
+                                                depth += 1
+                                            elif text[i] == '}':
+                                                depth -= 1
+                                            i += 1
+                                        if depth == 0:
+                                            objects.append(text[start:i])
+                                    else:
+                                        i += 1
+                                return objects
 
-                        matches = extract_json_objects(gpt_response)
+                            matches = extract_json_objects(gpt_response)
 
-                        if matches:
-                            for potential_json in matches:
-                                try:
-                                    parsed_json = json.loads(potential_json)
+                            if matches:
+                                for potential_json in matches:
+                                    try:
+                                        parsed_json = json.loads(potential_json)
 
-                                    # Check for error first, before looking for action
-                                    if "error" in parsed_json:
-                                        ollama_response = parsed_json
-                                        break
-                                    elif "action" in parsed_json:
-                                        ollama_response = parsed_json
-                                        break
+                                        # Check for error first, before looking for action
+                                        if "error" in parsed_json:
+                                            ollama_response = parsed_json
+                                            break
+                                        elif "action" in parsed_json:
+                                            ollama_response = parsed_json
+                                            break
 
-                                except json.JSONDecodeError:
-                                    continue
-                                except Exception:
-                                    continue
+                                    except json.JSONDecodeError:
+                                        continue
+                                    except Exception:
+                                        continue
 
-                    # Check if we actually found valid JSON
-                    if ollama_response is None:
+                        # Check if we actually found valid JSON
+                        if ollama_response is None:
+                            ollama_response = generate_fallback_response(command)
+
+                    except Exception as e:
+                        logger.warning(f"Error processing ChatGPT response: {e}")
                         ollama_response = generate_fallback_response(command)
 
-                except Exception as e:
-                    logger.warning(f"Error processing ChatGPT response: {e}")
-                    ollama_response = generate_fallback_response(command)
 
-
-        except Exception as e:
-            logger.error(f"Error with ChatGPT request: {str(e)}")
-            ollama_response = generate_fallback_response(command)
-        
-        # If GPT returned an error, try the keyword-based fallback parser as a second chance.
-        # GPT can be overly aggressive at rejecting valid commands like "find xyz" or "show pathways".
-        if "error" in ollama_response and "action" not in ollama_response:
-            fallback = generate_fallback_response(command)
-            if "action" in fallback:
-                # Fallback found a valid action — use it instead of GPT's error
-                logger.info(f"🔄 GPT returned error, but fallback found action: {fallback}")
-                ollama_response = fallback
-            elif "suggestions" in fallback:
-                # Fallback has a more helpful error with suggestions — use it
-                logger.info(f"🔄 GPT returned generic error, using fallback suggestions: {fallback}")
-                ollama_response = fallback
+            except Exception as e:
+                logger.error(f"Error with ChatGPT request: {str(e)}")
+                ollama_response = generate_fallback_response(command)
+            
+            # If GPT returned an error, try the keyword-based fallback parser as a second chance.
+            # GPT can be overly aggressive at rejecting valid commands like "find xyz" or "show pathways".
+            if "error" in ollama_response and "action" not in ollama_response:
+                fallback = generate_fallback_response(command)
+                if "action" in fallback:
+                    # Fallback found a valid action — use it instead of GPT's error
+                    logger.info(f"🔄 GPT returned error, but fallback found action: {fallback}")
+                    ollama_response = fallback
+                elif "suggestions" in fallback:
+                    # Fallback has a more helpful error with suggestions — use it
+                    logger.info(f"🔄 GPT returned generic error, using fallback suggestions: {fallback}")
+                    ollama_response = fallback
 
         # Extract data from response
         action = ollama_response.get("action")
@@ -2315,6 +2589,11 @@ def command_execution(request):
                 if action == 'set_clustering':
                     response_data["distance"] = dist_type
                     response_data["linkage"] = linkage_type
+
+                # Return the validated criteria for compound filters separately
+                # from the complete accumulated filter state.
+                if action in ['multi_filter', 'multi_exclude']:
+                    response_data["resolved_filters"] = filter_list
 
                 print(f"🔧 RESPONSE includes clustering_result: {'clustering_result' in response_data}")
             else:
@@ -3592,7 +3871,7 @@ def build_prompt(command, command_history=None, filters=None, metadata=None):
         "  - 'gene_filter'      : Filter rows/genes based on metadata. 'target' is the metadata field, 'value' is the filter value.\n"
         "  - 'multi_filter'     : Filter samples by MULTIPLE conditions (AND logic). Use when user specifies 2+ criteria. 'filters' is an array of {target, value} objects.\n"
         "  - 'exclude_filter'   : EXCLUDE/REMOVE samples matching criteria. Use for 'remove', 'exclude', 'not', 'without' commands. 'target' and 'value' specify what to exclude.\n"
-        "  - 'multi_exclude'    : EXCLUDE samples matching MULTIPLE criteria (AND logic). 'filters' is an array of {target, value} objects to exclude.\n"
+        "  - 'multi_exclude'    : EXCLUDE samples matching ANY of MULTIPLE criteria (OR logic). 'filters' is an array of {target, value} objects to exclude.\n"
         "  - 'clear_filters'    : Reset/clear all applied filters. Use for 'reset', 'clear', 'show all', 'remove filters' commands.\n"
         "  - 'variance'         : Select top N most variable rows or columns. 'value' should be the number of top features.\n"
         "  - 'set_opacity'      : Change the opacity/intensity of the heatmap. 'value' should be a number between 0.5 and 3.0 or 'dark'/'light'.\n"
@@ -3689,8 +3968,8 @@ EXCLUDE/REMOVE Commands (use exclude_filter or multi_exclude):
 "exclude females" → {{ "action": "exclude_filter", "target": "Sex", "value": "Female" }}
 "exclude C1D1 timepoint" → {{ "action": "exclude_filter", "target": "Timepoint", "value": "C1D1" }}
 "remove non-responders" → {{ "action": "exclude_filter", "target": "Response", "value": "Non-responder" }}
-"exclude male non-responders" → {{ "action": "multi_exclude", "filters": [{{"target": "Sex", "value": "Male"}}, {{"target": "Response", "value": "Non-responder"}}] }}
-"remove females at C1D1" → {{ "action": "multi_exclude", "filters": [{{"target": "Sex", "value": "Female"}}, {{"target": "Timepoint", "value": "C1D1"}}] }}
+"exclude males or non-responders" → {{ "action": "multi_exclude", "filters": [{{"target": "Sex", "value": "Male"}}, {{"target": "Response", "value": "Non-responder"}}] }}
+"remove females or C1D1 samples" → {{ "action": "multi_exclude", "filters": [{{"target": "Sex", "value": "Female"}}, {{"target": "Timepoint", "value": "C1D1"}}] }}
 
 CLEAR/RESET Commands:
 "clear all filters" → {{ "action": "clear_filters" }}
@@ -4268,6 +4547,127 @@ def apply_filters(df, filters,session_id=None):
                     remaining_cols = [col for col in data_matrix.columns if col not in exclude_labels]
                     if remaining_cols:
                         data_matrix = data_matrix.loc[:, remaining_cols]
+
+            elif f.get("type") == "multi_exclude":
+                criteria = f.get("criteria", [])
+
+                if not criteria:
+                    continue
+
+                all_nan_metadata = metadata_rows.isna().all().all()
+                if all_nan_metadata:
+                    try:
+                        orig_file_path = os.path.join(
+                            UPLOAD_DIR,
+                            f"{session_id}.tsv"
+                        )
+                        header_df = pd.read_csv(
+                            orig_file_path,
+                            sep="\t",
+                            nrows=matrix_start_row
+                        )
+                        metadata_rows = header_df
+                    except Exception as e:
+                        logger.warning(
+                            f"Could not load original file headers: {e}"
+                        )
+
+                matching_label_sets = []
+
+                for criterion in criteria:
+                    field = criterion.get("field")
+                    value = criterion.get("value")
+
+                    if not field or not value:
+                        continue
+
+                    field_row = None
+
+                    for idx in range(metadata_rows.shape[0]):
+                        row_values = (
+                            metadata_rows
+                            .iloc[idx, :]
+                            .astype(str)
+                        )
+
+                        if any(
+                            field == val.strip() or
+                            val.strip().startswith(f"{field}:")
+                            for val in row_values
+                        ):
+                            field_row = idx
+                            break
+
+                    if field_row is None:
+                        matching_label_sets = []
+                        break
+
+                    field_lower = field.lower()
+                    value_lower = value.lower()
+
+                    matching_labels = set()
+
+                    for col_idx in range(
+                        matrix_start_col,
+                        metadata_rows.shape[1]
+                    ):
+                        cell_value = str(
+                            metadata_rows.iloc[
+                                field_row,
+                                col_idx
+                            ]
+                        ).strip()
+
+                        if ":" not in cell_value:
+                            continue
+
+                        parts = cell_value.split(":", 1)
+
+                        if len(parts) != 2:
+                            continue
+
+                        cell_field = (
+                            parts[0]
+                            .strip()
+                            .lower()
+                        )
+                        cell_value_part = (
+                            parts[1]
+                            .strip()
+                            .lower()
+                        )
+
+                        if (
+                            cell_field == field_lower and
+                            cell_value_part == value_lower
+                        ):
+                            matching_labels.add(
+                                filtered_df.columns[col_idx]
+                            )
+
+                    matching_label_sets.append(
+                        matching_labels
+                    )
+
+                if matching_label_sets:
+                    # OR semantics: exclude samples matching
+                    # any of the exclusion criteria.
+                    labels_to_exclude = set.union(
+                        *matching_label_sets
+                    )
+
+                    if labels_to_exclude:
+                        remaining_cols = [
+                            col
+                            for col in data_matrix.columns
+                            if col not in labels_to_exclude
+                        ]
+
+                        if remaining_cols:
+                            data_matrix = data_matrix.loc[
+                                :,
+                                remaining_cols
+                            ]
         
         if data_matrix.empty:
             logger.warning("No data remains after applying all filters")
@@ -4493,8 +4893,14 @@ def update_filters_multi(filters: dict, action: str, filter_list: list = None, t
         if target and value:
             # Check if exclude filter for this field already exists
             field_filter_exists = False
-            for i, existing_filter in enumerate(updated_filters.get("col", [])):
-                if existing_filter.get("type") == "exclude_filter" and existing_filter.get("field") == target:
+
+            for i, existing_filter in enumerate(
+                updated_filters.get("col", [])
+            ):
+                if (
+                    existing_filter.get("type") == "exclude_filter"
+                    and existing_filter.get("field") == target
+                ):
                     # Replace existing exclude filter for this field
                     updated_filters["col"][i] = {
                         "type": "exclude_filter",
@@ -4513,33 +4919,26 @@ def update_filters_multi(filters: dict, action: str, filter_list: list = None, t
                 })
 
     elif action == "multi_exclude":
-        # Add multiple exclude filters (AND logic - exclude samples matching ALL criteria)
+        # Store one compound exclusion so the criteria are evaluated
+        # with OR semantics: exclude samples matching any criterion.
+        criteria = []
+
         if filter_list:
             for filter_obj in filter_list:
                 filter_target = filter_obj.get("target")
                 filter_value = filter_obj.get("value")
 
                 if filter_target and filter_value:
-                    # Check if exclude filter for this field already exists
-                    field_filter_exists = False
-                    for i, existing_filter in enumerate(updated_filters.get("col", [])):
-                        if existing_filter.get("type") == "exclude_filter" and existing_filter.get("field") == filter_target:
-                            # Replace existing exclude filter for this field
-                            updated_filters["col"][i] = {
-                                "type": "exclude_filter",
-                                "field": filter_target,
-                                "value": filter_value
-                            }
-                            field_filter_exists = True
-                            break
+                    criteria.append({
+                        "field": filter_target,
+                        "value": filter_value
+                    })
 
-                    # If no exclude filter for this field exists, add new one
-                    if not field_filter_exists:
-                        updated_filters.setdefault("col", []).append({
-                            "type": "exclude_filter",
-                            "field": filter_target,
-                            "value": filter_value
-                        })
+        if criteria:
+            updated_filters.setdefault("col", []).append({
+                "type": "multi_exclude",
+                "criteria": criteria
+            })
 
     return updated_filters
 
